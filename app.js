@@ -5,6 +5,52 @@ const TRIP_END = new Date(2027, 6, 31);   // 31 Jul 2027
 
 let STATE = { days: [], places: [], meta: null, currentDayIdx: 0 };
 
+/*
+ * Friends' views. One shared link (?for=friends) asks "Who are you?" once and
+ * remembers the answer on that phone. Ranges are fixed DATES (inclusive), not day
+ * numbers or sheet notes, so they survive rewording notes or inserting days.
+ * Edit here if plans change.
+ */
+const GROUPS = {
+  'chants-alan': { label: 'Chants & Alan', from: new Date(2027, 6, 6), to: new Date(2027, 6, 28) },  // Day 7–29
+  'tiff-petez':  { label: 'Tiff & Petez',  from: new Date(2027, 6, 11), to: new Date(2027, 6, 20) }, // Day 12–21
+};
+const GROUP_KEY = 'europe2027_group_v1';
+const FRIENDS_LINK = new URLSearchParams(window.location.search).get('for') === 'friends';
+
+function loadSavedGroup() {
+  try {
+    const id = localStorage.getItem(GROUP_KEY);
+    return id && GROUPS[id] ? id : null;
+  } catch (_) { return null; }
+}
+function saveGroup(id) {
+  try { id ? localStorage.setItem(GROUP_KEY, id) : localStorage.removeItem(GROUP_KEY); } catch (_) { /* not fatal */ }
+}
+
+let groupId = loadSavedGroup();   // remembered choice (also applies if the link loses ?for=)
+let showFullTrip = false;         // "Show full trip" toggle; back to their days on next open
+const currentGroup = () => (groupId ? GROUPS[groupId] : null);
+
+/** Indices of STATE.days currently viewable (all days, or just the couple's dates). */
+function visibleIdx() {
+  const all = STATE.days.map((_, i) => i);
+  const g = currentGroup();
+  if (!g || showFullTrip) return all;
+  const mine = all.filter((i) => {
+    const d = STATE.days[i].date;
+    return d && d >= g.from && d <= g.to;
+  });
+  return mine.length ? mine : all; // safety net: never show an empty trip
+}
+
+/** True when a couple is chosen but none of their dates are in the plan. */
+function groupDatesMissing() {
+  const g = currentGroup();
+  if (!g) return false;
+  return !STATE.days.some((d) => d.date && d.date >= g.from && d.date <= g.to);
+}
+
 function fmtTime(d) {
   return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
@@ -18,10 +64,13 @@ function escapeHtml(s) {
 function pickInitialDayIndex(days) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  if (today < TRIP_START) return 0;
-  if (today > TRIP_END) return days.length - 1;
+  const vis = visibleIdx();
+  if (!vis.length) return 0;
+  const first = vis[0], last = vis[vis.length - 1];
   const idx = days.findIndex((d) => d.date && sameDate(d.date, today));
-  return idx === -1 ? 0 : idx;
+  if (idx !== -1 && vis.includes(idx)) return idx;
+  if (days[last].date && today > days[last].date) return last;
+  return first;
 }
 
 function sameDate(a, b) {
@@ -33,31 +82,42 @@ function todayDayIndex() {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
   if (today < TRIP_START || today > TRIP_END) return -1;
-  return STATE.days.findIndex((d) => d.date && sameDate(d.date, today));
+  const idx = STATE.days.findIndex((d) => d.date && sameDate(d.date, today));
+  return visibleIdx().includes(idx) ? idx : -1;
 }
 
 /** Change day: re-render and start at the top of the new day. */
 function goToDay(idx) {
-  if (idx < 0 || idx >= STATE.days.length) return;
+  if (!visibleIdx().includes(idx)) return;
   STATE.currentDayIdx = idx;
   renderToday();
   window.scrollTo(0, 0);
 }
 
-function daysUntilTrip() {
+function stepDay(delta) {
+  const vis = visibleIdx();
+  const pos = vis.indexOf(STATE.currentDayIdx);
+  if (pos !== -1) goToDay(vis[pos + delta]);
+}
+
+function daysUntil(date) {
   const now = new Date();
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  const ms = TRIP_START - today;
-  return Math.ceil(ms / (1000 * 60 * 60 * 24));
+  return Math.ceil((date - today) / (1000 * 60 * 60 * 24));
 }
 
 /* ---------------- Rendering: Today screen ---------------- */
 
 function renderCountdownBanner() {
   const el = document.getElementById('countdown-banner');
-  const n = daysUntilTrip();
+  const g = currentGroup();
+  const inGroupView = g && !showFullTrip && !groupDatesMissing();
+  const n = daysUntil(inGroupView ? g.from : TRIP_START);
   if (n > 0) {
-    el.innerHTML = `<div class="countdown-banner">${n} day${n === 1 ? '' : 's'} to go — Europe 2027! ✈️</div>`;
+    const msg = inGroupView
+      ? `${n} day${n === 1 ? '' : 's'} until you join us! ✈️`
+      : `${n} day${n === 1 ? '' : 's'} to go — Europe 2027! ✈️`;
+    el.innerHTML = `<div class="countdown-banner">${msg}</div>`;
   } else {
     el.innerHTML = '';
   }
@@ -65,7 +125,8 @@ function renderCountdownBanner() {
 
 function renderDayStrip() {
   const strip = document.getElementById('day-strip');
-  strip.innerHTML = STATE.days.map((d, i) => {
+  strip.innerHTML = visibleIdx().map((i) => {
+    const d = STATE.days[i];
     const active = i === STATE.currentDayIdx ? ' active' : '';
     const loc = escapeHtml(d.locations[0] || '');
     return `<button class="day-chip${active}" data-idx="${i}">
@@ -80,8 +141,9 @@ function renderDayStrip() {
   if (activeChip) {
     strip.scrollTo({ left: activeChip.offsetLeft - (strip.clientWidth - activeChip.offsetWidth) / 2 });
   }
-  document.getElementById('day-prev').disabled = STATE.currentDayIdx === 0;
-  document.getElementById('day-next').disabled = STATE.currentDayIdx === STATE.days.length - 1;
+  const vis = visibleIdx();
+  document.getElementById('day-prev').disabled = STATE.currentDayIdx === vis[0];
+  document.getElementById('day-next').disabled = STATE.currentDayIdx === vis[vis.length - 1];
   const ti = todayDayIndex();
   document.getElementById('day-today').hidden = ti === -1 || ti === STATE.currentDayIdx;
 }
@@ -146,7 +208,69 @@ function renderSyncFooter() {
   el.disabled = refreshing;
 }
 
+/* ---------------- Friends: picker + view bar ---------------- */
+
+/** Full-screen "Who are you?" picker. Shown once per phone; choice is remembered. */
+function showGroupPicker() {
+  const el = document.getElementById('group-picker');
+  el.innerHTML = `<div class="picker-card" role="dialog" aria-label="Who are you?">
+    <p class="picker-title">Who are you? 👋</p>
+    <p class="picker-sub">We'll show just your days of the trip. You only need to pick once.</p>
+    ${Object.entries(GROUPS).map(([id, g]) => {
+      const vis = STATE.days.filter((d) => d.date && d.date >= g.from && d.date <= g.to);
+      const range = vis.length ? `Day ${vis[0].day}–${vis[vis.length - 1].day}` : '';
+      return `<button type="button" class="picker-btn" data-id="${id}">
+        <span>${escapeHtml(g.label)}</span><span class="picker-range">${range}</span></button>`;
+    }).join('')}
+    <button type="button" class="picker-skip" data-id="">Just show the full trip</button>
+  </div>`;
+  el.hidden = false;
+  el.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', () => chooseGroup(btn.dataset.id || null)));
+}
+
+function chooseGroup(id) {
+  groupId = id && GROUPS[id] ? id : null;
+  saveGroup(groupId || 'none');
+  showFullTrip = false;
+  document.getElementById('group-picker').hidden = true;
+  STATE.currentDayIdx = pickInitialDayIndex(STATE.days);
+  renderCurrentScreen();
+  window.scrollTo(0, 0);
+}
+
+/** Bar on Today/Overview when a couple is chosen: whose view + toggle + change. */
+function renderGroupBar() {
+  const html = (() => {
+    const g = currentGroup();
+    if (!g) return '';
+    if (groupDatesMissing()) {
+      return `<div class="group-bar"><span>Couldn't find ${escapeHtml(g.label)}'s dates in the plan — showing the full trip.</span>
+        <button type="button" data-act="change">Change</button></div>`;
+    }
+    const vis = visibleIdx();
+    const range = showFullTrip ? 'Full trip' : `Day ${STATE.days[vis[0]].day}–${STATE.days[vis[vis.length - 1]].day}`;
+    return `<div class="group-bar">
+      <span>👋 <strong>${escapeHtml(g.label)}</strong> · ${range}</span>
+      <span class="group-actions">
+        <button type="button" data-act="toggle">${showFullTrip ? 'Our days' : 'Full trip'}</button>
+        <button type="button" data-act="change">Change</button>
+      </span>
+    </div>`;
+  })();
+  document.querySelectorAll('.group-bar-slot').forEach((slot) => {
+    slot.innerHTML = html;
+    slot.querySelectorAll('button[data-act]').forEach((btn) => btn.addEventListener('click', () => {
+      if (btn.dataset.act === 'change') { showGroupPicker(); return; }
+      showFullTrip = !showFullTrip;
+      STATE.currentDayIdx = pickInitialDayIndex(STATE.days);
+      renderCurrentScreen();
+      window.scrollTo(0, 0);
+    }));
+  });
+}
+
 function renderToday() {
+  renderGroupBar();
   renderCountdownBanner();
   renderDayStrip();
   const d = STATE.days[STATE.currentDayIdx];
@@ -173,7 +297,8 @@ function computeBlocks(days) {
 
 function renderOverview() {
   const list = document.getElementById('overview-list');
-  const blocks = computeBlocks(STATE.days);
+  renderGroupBar();
+  const blocks = computeBlocks(visibleIdx().map((i) => STATE.days[i]));
   list.innerHTML = blocks.map((b) => {
     const range = b.startDay === b.endDay ? `Day ${b.startDay}` : `Day ${b.startDay}–${b.endDay}`;
     return `<div class="overview-block" data-start="${b.startDay}">
@@ -357,8 +482,8 @@ document.querySelectorAll('.bottom-nav button').forEach((btn) => {
   });
 });
 
-document.getElementById('day-prev').addEventListener('click', () => goToDay(STATE.currentDayIdx - 1));
-document.getElementById('day-next').addEventListener('click', () => goToDay(STATE.currentDayIdx + 1));
+document.getElementById('day-prev').addEventListener('click', () => stepDay(-1));
+document.getElementById('day-next').addEventListener('click', () => stepDay(1));
 document.getElementById('day-today').addEventListener('click', () => goToDay(todayDayIndex()));
 
 // Swipe between days: only clearly horizontal swipes count, so scrolling down a
@@ -374,7 +499,7 @@ todayScreen.addEventListener('touchend', (e) => {
   const dy = e.changedTouches[0].clientY - touchStart.y;
   touchStart = null;
   if (Math.abs(dx) < 60 || Math.abs(dx) < 2 * Math.abs(dy)) return;
-  goToDay(STATE.currentDayIdx + (dx < 0 ? 1 : -1));
+  stepDay(dx < 0 ? 1 : -1);
 }, { passive: true });
 
 /* ---------------- Data load + refresh ---------------- */
@@ -385,9 +510,9 @@ let lastRefreshAttempt = 0;
 function applyData({ csvText, source, fetchedAt }) {
   const { days, places, meta } = parseItinerary(csvText);
   const keepDay = STATE.days.length ? STATE.days[STATE.currentDayIdx]?.day : null;
-  let idx = keepDay != null ? days.findIndex((d) => d.day === keepDay) : -1;
-  if (idx === -1) idx = pickInitialDayIndex(days);
-  STATE = { days, places, meta, source, fetchedAt, currentDayIdx: idx };
+  STATE = { days, places, meta, source, fetchedAt, currentDayIdx: 0 };
+  const idx = keepDay != null ? days.findIndex((d) => d.day === keepDay) : -1;
+  STATE.currentDayIdx = idx !== -1 && visibleIdx().includes(idx) ? idx : pickInitialDayIndex(days);
 }
 
 /** Check the sheet in the background. The saved copy stays on screen meanwhile. */
@@ -424,6 +549,9 @@ async function boot() {
   applyData(await loadLocalCSV());
   renderToday();
   renderSyncFooter();
+  let saved = null;
+  try { saved = localStorage.getItem(GROUP_KEY); } catch (_) { /* ignore */ }
+  if (FRIENDS_LINK && !saved) showGroupPicker();
 
   // 2. Then check the sheet in the background (8s timeout).
   refreshFromSheet();

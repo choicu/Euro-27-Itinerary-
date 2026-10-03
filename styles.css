@@ -539,3 +539,76 @@ body:not(.on-today) .day-strip { display: none; }
   text-decoration: none;
   box-shadow: var(--card-shadow);
 }
+
+/* ---------- Friends: view bar + picker ---------- */
+.group-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin: 12px 16px 0;
+  padding: 6px 6px 6px 14px;
+  border-radius: 14px;
+  background: var(--chip-bg);
+  color: var(--chip-text);
+  font-size: 14px;
+}
+.group-actions { display: flex; gap: 6px; }
+.group-bar button {
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--chip-text);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--chip-text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.group-picker {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px 16px;
+  background: rgba(20, 20, 20, 0.55);
+}
+.group-picker[hidden] { display: none; }
+.picker-card {
+  width: 100%;
+  max-width: 400px;
+  background: var(--surface);
+  border-radius: 20px;
+  padding: 22px 18px 14px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+}
+.picker-title { font-size: 22px; font-weight: 700; margin: 0 0 4px; }
+.picker-sub { font-size: 14px; color: var(--text-soft); margin: 0 0 16px; }
+.picker-btn {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  min-height: 56px;
+  margin-bottom: 10px;
+  padding: 0 18px;
+  border: none;
+  border-radius: 14px;
+  background: var(--primary);
+  color: #fff;
+  font-size: 17px;
+  font-weight: 700;
+}
+.picker-range { font-size: 13px; font-weight: 600; opacity: 0.85; }
+.picker-skip {
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  border: none;
+  background: none;
+  color: var(--text-soft);
+  font-size: 14px;
+  text-decoration: underline;
+}

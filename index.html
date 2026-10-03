@@ -5,7 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="robots" content="noindex,nofollow">
   <title>Europe 2027</title>
-  <link rel="manifest" href="manifest.webmanifest">
+  <script>
+    // Friends link keeps ?for=friends when added to the home screen.
+    document.write('<link rel="manifest" href="' +
+      (new URLSearchParams(location.search).get('for') === 'friends' ? 'manifest-friends.webmanifest' : 'manifest.webmanifest') + '">');
+  </script>
   <meta name="theme-color" content="#3f8fa6">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
@@ -25,12 +29,14 @@
   </div>
 
   <div id="screen-today" class="screen active">
+    <div class="group-bar-slot"></div>
     <div id="countdown-banner"></div>
     <div class="day-header" id="day-header"></div>
     <div class="timeline" id="timeline"></div>
   </div>
 
   <div id="screen-overview" class="screen">
+    <div class="group-bar-slot"></div>
     <div id="overview-list" style="padding-top: 8px;"></div>
   </div>
 
@@ -44,6 +50,8 @@
   </div>
 
   <button class="sync-footer" id="sync-footer" type="button">Loading…</button>
+
+  <div id="group-picker" class="group-picker" hidden></div>
 
   <nav class="bottom-nav">
     <button data-screen="today" class="active"><span class="ic">📅</span>Today</button>
