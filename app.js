@@ -249,7 +249,7 @@ document.getElementById('group-picker').addEventListener('click', (e) => {
   // Tap outside the card closes the menu (but not the first-time picker, which needs an answer).
   if (e.target.id === 'group-picker' && (groupId || loadSavedRaw())) closeOverlay();
 });
-document.getElementById('group-chip').addEventListener('click', showGroupMenu);
+document.getElementById('group-chip').addEventListener('click', () => (currentGroup() ? showGroupMenu() : showGroupPicker()));
 
 function loadSavedRaw() { try { return localStorage.getItem(GROUP_KEY); } catch (_) { return null; } }
 
@@ -303,10 +303,17 @@ function renderGroupBar() {
   const chip = document.getElementById('group-chip');
   const title = document.getElementById('topbar-title');
   const g = currentGroup();
-  const show = g && (currentScreen === 'today' || currentScreen === 'overview');
+  // Friends mode: opened via the friends link, or a choice (incl. "full trip") was saved on this phone.
+  const friendsMode = Boolean(g || FRIENDS_LINK || loadSavedRaw());
+  const show = friendsMode && (currentScreen === 'today' || currentScreen === 'overview');
   chip.hidden = !show;
   title.hidden = Boolean(show);
   if (!show) return;
+  if (!g) {
+    // No couple chosen ("Just show the full trip"): keep a way back to the filter.
+    chip.innerHTML = `<span class="gc-name">👥 Full trip</span><span class="gc-range">Pick your days ▾</span>`;
+    return;
+  }
   const vis = visibleIdx();
   const range = showFullTrip || groupDatesMissing()
     ? 'Full trip'
