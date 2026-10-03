@@ -544,31 +544,28 @@ body:not(.on-today) .day-strip { display: none; }
   box-shadow: var(--card-shadow);
 }
 
-/* ---------- Friends: view bar + picker ---------- */
-.group-bar {
+/* ---------- Friends: header chip + picker/menu ---------- */
+.topbar h1[hidden], .group-chip[hidden] { display: none; }
+.group-chip {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  flex-wrap: wrap;
-  margin: 12px 16px 0;
-  padding: 6px 6px 6px 14px;
-  border-radius: 14px;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  min-height: 44px;
+  min-width: 0;
+  max-width: 62%;
+  padding: 3px 12px;
+  border: 1px solid var(--chip-text);
+  border-radius: 12px;
   background: var(--chip-bg);
   color: var(--chip-text);
-  font-size: 14px;
+  text-align: left;
+  line-height: 1.2;
 }
-.group-actions { display: flex; gap: 6px; }
-.group-bar button {
-  min-height: 40px;
-  padding: 0 12px;
-  border: 1px solid var(--chip-text);
-  border-radius: 999px;
-  background: var(--surface);
-  color: var(--chip-text);
-  font-size: 13px;
-  font-weight: 700;
-}
+.group-chip .gc-name { font-size: 14px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.group-chip .gc-range { font-size: 12px; font-weight: 600; white-space: nowrap; }
+.picker-btn.alt { background: var(--chip-bg); color: var(--chip-text); }
+.picker-btn[aria-pressed="true"] { outline: 3px solid var(--secondary); outline-offset: 2px; }
 .group-picker {
   position: fixed;
   inset: 0;

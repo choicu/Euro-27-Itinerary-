@@ -245,6 +245,14 @@ function showGroupPicker() {
   el.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', () => chooseGroup(btn.dataset.id || null)));
 }
 
+document.getElementById('group-picker').addEventListener('click', (e) => {
+  // Tap outside the card closes the menu (but not the first-time picker, which needs an answer).
+  if (e.target.id === 'group-picker' && (groupId || loadSavedRaw())) closeOverlay();
+});
+document.getElementById('group-chip').addEventListener('click', showGroupMenu);
+
+function loadSavedRaw() { try { return localStorage.getItem(GROUP_KEY); } catch (_) { return null; } }
+
 function chooseGroup(id) {
   groupId = id && GROUPS[id] ? id : null;
   saveGroup(groupId || 'none');
@@ -255,35 +263,55 @@ function chooseGroup(id) {
   window.scrollTo(0, 0);
 }
 
-/** Bar on Today/Overview when a couple is chosen: whose view + toggle + change. */
+/** Close the picker / menu overlay. */
+function closeOverlay() { document.getElementById('group-picker').hidden = true; }
+
+/** Small menu opened from the header chip: switch our days / full trip, or change couple. */
+function showGroupMenu() {
+  const g = currentGroup();
+  if (!g) return;
+  const el = document.getElementById('group-picker');
+  const ours = dayRangeLabel(STATE.days.filter((d) => d.date && d.date >= g.from && d.date <= g.to));
+  const missing = groupDatesMissing();
+  el.innerHTML = `<div class="picker-card" role="dialog" aria-label="${escapeHtml(g.label)}">
+    <p class="picker-title">👋 ${escapeHtml(g.label)}</p>
+    ${missing
+      ? `<p class="picker-sub">Couldn't find your dates in the plan, so the full trip is showing.</p>`
+      : `<button type="button" class="picker-btn" data-act="ours"${!showFullTrip ? ' aria-pressed="true"' : ''}>
+          <span>Just our days</span><span class="picker-range">${ours}</span></button>
+         <button type="button" class="picker-btn alt" data-act="full"${showFullTrip ? ' aria-pressed="true"' : ''}>
+          <span>Full trip</span><span class="picker-range">All ${STATE.days.length} days</span></button>`}
+    <button type="button" class="picker-skip" data-act="change">Not ${escapeHtml(g.label)}? Change</button>
+  </div>`;
+  el.hidden = false;
+  el.querySelectorAll('button[data-act]').forEach((btn) => btn.addEventListener('click', () => {
+    const act = btn.dataset.act;
+    if (act === 'change') { showGroupPicker(); return; }
+    showFullTrip = act === 'full';
+    closeOverlay();
+    STATE.currentDayIdx = pickInitialDayIndex(STATE.days);
+    renderCurrentScreen();
+    window.scrollTo(0, 0);
+  }));
+}
+
+/*
+ * Couple chip lives in the pinned header (never scrolls away). Shown on Today and
+ * Overview in place of the title; other screens keep their normal title.
+ */
 function renderGroupBar() {
-  const html = (() => {
-    const g = currentGroup();
-    if (!g) return '';
-    if (groupDatesMissing()) {
-      return `<div class="group-bar"><span>Couldn't find ${escapeHtml(g.label)}'s dates in the plan — showing the full trip.</span>
-        <button type="button" data-act="change">Change</button></div>`;
-    }
-    const vis = visibleIdx();
-    const range = showFullTrip ? 'Full trip' : dayRangeLabel(vis.map((i) => STATE.days[i]));
-    return `<div class="group-bar">
-      <span>👋 <strong>${escapeHtml(g.label)}</strong> · ${range}</span>
-      <span class="group-actions">
-        <button type="button" data-act="toggle">${showFullTrip ? 'Our days' : 'Full trip'}</button>
-        <button type="button" data-act="change">Change</button>
-      </span>
-    </div>`;
-  })();
-  document.querySelectorAll('.group-bar-slot').forEach((slot) => {
-    slot.innerHTML = html;
-    slot.querySelectorAll('button[data-act]').forEach((btn) => btn.addEventListener('click', () => {
-      if (btn.dataset.act === 'change') { showGroupPicker(); return; }
-      showFullTrip = !showFullTrip;
-      STATE.currentDayIdx = pickInitialDayIndex(STATE.days);
-      renderCurrentScreen();
-      window.scrollTo(0, 0);
-    }));
-  });
+  const chip = document.getElementById('group-chip');
+  const title = document.getElementById('topbar-title');
+  const g = currentGroup();
+  const show = g && (currentScreen === 'today' || currentScreen === 'overview');
+  chip.hidden = !show;
+  title.hidden = Boolean(show);
+  if (!show) return;
+  const vis = visibleIdx();
+  const range = showFullTrip || groupDatesMissing()
+    ? 'Full trip'
+    : shortRange(STATE.days[vis[0]].date, STATE.days[vis[vis.length - 1]].date);
+  chip.innerHTML = `<span class="gc-name">👋 ${escapeHtml(g.label)}</span><span class="gc-range">${escapeHtml(range)} ▾</span>`;
 }
 
 function renderToday() {
@@ -481,6 +509,7 @@ function showScreen(name) {
   document.querySelectorAll('.bottom-nav button').forEach((b) => b.classList.toggle('active', b.dataset.screen === name));
   const titles = { today: 'Europe 2027', overview: 'Trip Overview', places: 'Places to Try', handy: 'Handy Info' };
   document.getElementById('topbar-title').textContent = titles[name];
+  renderGroupBar();
   // Day strip + day controls belong to the Today screen only.
   document.body.classList.toggle('on-today', name === 'today');
   window.scrollTo(0, 0);
