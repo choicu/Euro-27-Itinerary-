@@ -369,7 +369,7 @@ function renderOverview() {
 let placesFilter = 'All';
 
 function renderPlacesFilter() {
-  const cities = Array.from(new Set(STATE.places.map((p) => p.city).filter(Boolean)));
+  const cities = Array.from(new Set(STATE.places.map((p) => p.area).filter(Boolean)));
   const filterEl = document.getElementById('places-filter');
   const opts = ['All', ...cities];
   filterEl.innerHTML = opts.map((c) =>
@@ -386,11 +386,11 @@ function renderPlacesFilter() {
 
 function renderPlacesList() {
   const list = document.getElementById('places-list');
-  const items = placesFilter === 'All' ? STATE.places : STATE.places.filter((p) => p.city === placesFilter);
+  const items = placesFilter === 'All' ? STATE.places : STATE.places.filter((p) => p.area === placesFilter);
   list.innerHTML = items.map((p) => `
     <div class="place-card">
       <div class="name">${escapeHtml(p.name)}</div>
-      <div class="meta">${[p.city, p.category].filter(Boolean).map(escapeHtml).join(' · ')}</div>
+      <div class="meta">${[p.area, p.category].filter(Boolean).map(escapeHtml).join(' · ')}</div>
       ${p.notes ? `<div class="notes">${escapeHtml(p.notes)}</div>` : ''}
       ${extLink(p.url, 'map-btn', '📍 Map')}
     </div>

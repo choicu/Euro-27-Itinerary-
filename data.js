@@ -221,14 +221,17 @@ export function parseItinerary(csvText) {
       if (!name) continue; // blank placeholder row
       const addr = get(pcol.address);
       const city = get(pcol.city);
+      const location = get(pcol.location); // column D: the place's town (used for filter, label, map search)
+      const area = location || city;       // fall back to City only if Location is blank
       const url = /^https?:\/\//i.test(addr)
         ? addr
-        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([name, city].filter(Boolean).join(', '))}`;
+        : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent([name, area].filter(Boolean).join(', '))}`;
       places.push({
         country: get(pcol.country) || null,
         city: city || null,
         category: get(pcol.category) || null,
-        location: get(pcol.location) || null,
+        location: location || null,
+        area: area || null,
         time: get(pcol.time) || null,
         name,
         bookingStatus: get(pcol.booking) || null,
