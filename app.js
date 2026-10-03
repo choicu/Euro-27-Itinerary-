@@ -82,6 +82,22 @@ function dayRangeLabel(days) {
   return datePart ? `${dayPart} · ${datePart}` : dayPart;
 }
 
+/**
+ * Only allow real web/phone links into href attributes. Anything else (e.g. a sheet
+ * cell containing quotes or a "javascript:" link) becomes null and no link is drawn.
+ */
+function safeUrl(u) {
+  try {
+    const url = new URL(String(u ?? ''));
+    return ['https:', 'http:', 'tel:'].includes(url.protocol) ? escapeHtml(url.href) : null;
+  } catch (_) { return null; }
+}
+/** <a> for an external link, or '' if the URL isn't safe. */
+function extLink(url, cls, inner) {
+  const href = safeUrl(url);
+  return href ? `<a class="${cls}" href="${href}" target="_blank" rel="noopener noreferrer">${inner}</a>` : '';
+}
+
 function escapeHtml(s) {
   return (s ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -200,7 +216,7 @@ function cardHtml(card) {
       </div>
       ${card.notes ? `<div class="notes">${escapeHtml(card.notes)}</div>` : ''}
       ${card.logistics ? `<div class="logistics">🧭 ${escapeHtml(card.logistics)}</div>` : ''}
-      ${card.hasLink ? `<a class="map-btn" href="${card.url}" target="_blank" rel="noopener">📍 Map</a>` : ''}
+      ${card.hasLink ? extLink(card.url, 'map-btn', '📍 Map') : ''}
     </div>
   `;
 }
@@ -376,7 +392,7 @@ function renderPlacesList() {
       <div class="name">${escapeHtml(p.name)}</div>
       <div class="meta">${[p.city, p.category].filter(Boolean).map(escapeHtml).join(' · ')}</div>
       ${p.notes ? `<div class="notes">${escapeHtml(p.notes)}</div>` : ''}
-      <a class="map-btn" href="${p.url}" target="_blank" rel="noopener">📍 Map</a>
+      ${extLink(p.url, 'map-btn', '📍 Map')}
     </div>
   `).join('');
 }
@@ -400,13 +416,13 @@ function linkifyPhones(text) {
 
 function sourceLine(item) {
   if (!item || !item.source) return '';
-  return `<a class="source-link" href="${item.source}" target="_blank" rel="noopener">source, verified ${escapeHtml(item.verified || '')}</a>`;
+  return extLink(item.source, 'source-link', `source, verified ${escapeHtml(item.verified || '')}`);
 }
 
 function renderHandy() {
   const el = document.getElementById('handy-list');
   if (!HANDY) {
-    el.innerHTML = '<p style="color:var(--text-soft);font-size:14px;">Handy Info couldn\'t be loaded.</p>';
+    el.innerHTML = '<p class="muted-note">Handy Info couldn\'t be loaded.</p>';
     return;
   }
 
@@ -455,7 +471,7 @@ function renderHandy() {
       <h2>🚆 Transport</h2>
       ${HANDY.transport.map((t) => `
         <div class="handy-item">
-          <a class="handy-value link" href="${t.url}" target="_blank" rel="noopener">${escapeHtml(t.name)}</a>
+          ${extLink(t.url, 'handy-value link', escapeHtml(t.name))}
           <div class="handy-notes">${escapeHtml(t.note)}</div>
         </div>
       `).join('')}
@@ -467,7 +483,7 @@ function renderHandy() {
       <h2>🎶 Tomorrowland</h2>
       ${HANDY.tomorrowland.map((t) => `
         <div class="handy-item">
-          <a class="handy-value link" href="${t.url}" target="_blank" rel="noopener">${escapeHtml(t.label)}</a>
+          ${extLink(t.url, 'handy-value link', escapeHtml(t.label))}
         </div>
       `).join('')}
     </section>
@@ -477,7 +493,7 @@ function renderHandy() {
     <section class="handy-section">
       <h2>☀️ Weather</h2>
       <div class="weather-grid">
-        ${HANDY.weather.map((w) => `<a class="weather-chip" href="${w.url}" target="_blank" rel="noopener">${escapeHtml(w.city)}</a>`).join('')}
+        ${HANDY.weather.map((w) => extLink(w.url, 'weather-chip', escapeHtml(w.city))).join('')}
       </div>
     </section>
   `;

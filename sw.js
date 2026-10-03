@@ -1,5 +1,5 @@
 // Bump CACHE_VERSION on every app-shell change so phones pick up the update.
-const CACHE_VERSION = 'v6';
+const CACHE_VERSION = 'v7';
 const SHELL_CACHE = `europe2027-shell-${CACHE_VERSION}`;
 
 const SHELL_FILES = [
@@ -10,6 +10,7 @@ const SHELL_FILES = [
   'data.js',
   'manifest.webmanifest',
   'manifest-friends.webmanifest',
+  'manifest-switch.js',
   'data/itinerary.snapshot.csv',
   'content/handy.json',
   'icons/icon-192.png',
