@@ -16,7 +16,8 @@ const GROUPS = {
   'tiff-petez':  { label: 'Tiff & Petez',  from: new Date(2027, 6, 11), to: new Date(2027, 6, 20) }, // Day 12–21
 };
 const GROUP_KEY = 'europe2027_group_v1';
-const FRIENDS_LINK = new URLSearchParams(window.location.search).get('for') === 'friends';
+const URL_FOR = new URLSearchParams(window.location.search).get('for');
+const FRIENDS_LINK = URL_FOR === 'friends';
 
 function loadSavedGroup() {
   try {
@@ -28,20 +29,28 @@ function saveGroup(id) {
   try { id ? localStorage.setItem(GROUP_KEY, id) : localStorage.removeItem(GROUP_KEY); } catch (_) { /* not fatal */ }
 }
 
-let groupId = loadSavedGroup();   // remembered choice (also applies if the link loses ?for=)
-let showFullTrip = false;         // "Show full trip" toggle; back to their days on next open
+// Jason's reset link (?for=all): clears any couple saved on this phone and shows the full trip.
+if (URL_FOR === 'all') saveGroup(null);
+
+let groupId = URL_FOR === 'all' ? null : loadSavedGroup(); // remembered couple (applies even if ?for= is lost)
 const currentGroup = () => (groupId ? GROUPS[groupId] : null);
 
-/** Indices of STATE.days currently viewable (all days, or just the couple's dates). */
+/*
+ * Friends mode: opened via the friends link, or a couple is saved on this phone.
+ * In friends mode ONLY that couple's days are ever shown — no full-trip option.
+ */
+const isFriendsMode = () => Boolean(FRIENDS_LINK || currentGroup());
+
+/** Indices of STATE.days currently viewable. Friends: just their dates (empty until they pick). */
 function visibleIdx() {
   const all = STATE.days.map((_, i) => i);
+  if (!isFriendsMode()) return all;
   const g = currentGroup();
-  if (!g || showFullTrip) return all;
-  const mine = all.filter((i) => {
+  if (!g) return [];
+  return all.filter((i) => {
     const d = STATE.days[i].date;
     return d && d >= g.from && d <= g.to;
   });
-  return mine.length ? mine : all; // safety net: never show an empty trip
 }
 
 /** True when a couple is chosen but none of their dates are in the plan. */
@@ -129,7 +138,7 @@ function daysUntil(date) {
 function renderCountdownBanner() {
   const el = document.getElementById('countdown-banner');
   const g = currentGroup();
-  const inGroupView = g && !showFullTrip && !groupDatesMissing();
+  const inGroupView = g && !groupDatesMissing();
   const n = daysUntil(inGroupView ? g.from : TRIP_START);
   if (n > 0) {
     const msg = inGroupView
@@ -160,8 +169,8 @@ function renderDayStrip() {
     strip.scrollTo({ left: activeChip.offsetLeft - (strip.clientWidth - activeChip.offsetWidth) / 2 });
   }
   const vis = visibleIdx();
-  document.getElementById('day-prev').disabled = STATE.currentDayIdx === vis[0];
-  document.getElementById('day-next').disabled = STATE.currentDayIdx === vis[vis.length - 1];
+  document.getElementById('day-prev').disabled = !vis.length || STATE.currentDayIdx === vis[0];
+  document.getElementById('day-next').disabled = !vis.length || STATE.currentDayIdx === vis[vis.length - 1];
   const ti = todayDayIndex();
   document.getElementById('day-today').hidden = ti === -1 || ti === STATE.currentDayIdx;
 }
@@ -228,103 +237,74 @@ function renderSyncFooter() {
 
 /* ---------------- Friends: picker + view bar ---------------- */
 
-/** Full-screen "Who are you?" picker. Shown once per phone; choice is remembered. */
+/** "Who are you?" picker. Must be answered the first time; after that it can be closed. */
 function showGroupPicker() {
   const el = document.getElementById('group-picker');
   el.innerHTML = `<div class="picker-card" role="dialog" aria-label="Who are you?">
     <p class="picker-title">Who are you? 👋</p>
-    <p class="picker-sub">We'll show just your days of the trip. You only need to pick once.</p>
+    <p class="picker-sub">We'll show your days of the trip. You only need to pick once.</p>
     ${Object.entries(GROUPS).map(([id, g]) => {
       const range = dayRangeLabel(STATE.days.filter((d) => d.date && d.date >= g.from && d.date <= g.to));
-      return `<button type="button" class="picker-btn" data-id="${id}">
+      const on = id === groupId ? ' aria-pressed="true"' : '';
+      return `<button type="button" class="picker-btn" data-id="${id}"${on}>
         <span>${escapeHtml(g.label)}</span><span class="picker-range">${range}</span></button>`;
     }).join('')}
-    <button type="button" class="picker-skip" data-id="">Just show the full trip</button>
   </div>`;
   el.hidden = false;
-  el.querySelectorAll('button').forEach((btn) => btn.addEventListener('click', () => chooseGroup(btn.dataset.id || null)));
+  el.querySelectorAll('button[data-id]').forEach((btn) => btn.addEventListener('click', () => chooseGroup(btn.dataset.id)));
 }
 
 document.getElementById('group-picker').addEventListener('click', (e) => {
-  // Tap outside the card closes the menu (but not the first-time picker, which needs an answer).
-  if (e.target.id === 'group-picker' && (groupId || loadSavedRaw())) closeOverlay();
+  // Tap outside the card closes it once a couple is chosen; the first pick needs an answer.
+  if (e.target.id === 'group-picker' && currentGroup()) closeOverlay();
 });
-document.getElementById('group-chip').addEventListener('click', () => (currentGroup() ? showGroupMenu() : showGroupPicker()));
-
-function loadSavedRaw() { try { return localStorage.getItem(GROUP_KEY); } catch (_) { return null; } }
+document.getElementById('group-chip').addEventListener('click', showGroupPicker);
 
 function chooseGroup(id) {
-  groupId = id && GROUPS[id] ? id : null;
-  saveGroup(groupId || 'none');
-  showFullTrip = false;
-  document.getElementById('group-picker').hidden = true;
+  if (!GROUPS[id]) return;
+  groupId = id;
+  saveGroup(id);
+  closeOverlay();
   STATE.currentDayIdx = pickInitialDayIndex(STATE.days);
   renderCurrentScreen();
   window.scrollTo(0, 0);
 }
 
-/** Close the picker / menu overlay. */
+/** Close the picker overlay. */
 function closeOverlay() { document.getElementById('group-picker').hidden = true; }
-
-/** Small menu opened from the header chip: switch our days / full trip, or change couple. */
-function showGroupMenu() {
-  const g = currentGroup();
-  if (!g) return;
-  const el = document.getElementById('group-picker');
-  const ours = dayRangeLabel(STATE.days.filter((d) => d.date && d.date >= g.from && d.date <= g.to));
-  const missing = groupDatesMissing();
-  el.innerHTML = `<div class="picker-card" role="dialog" aria-label="${escapeHtml(g.label)}">
-    <p class="picker-title">👋 ${escapeHtml(g.label)}</p>
-    ${missing
-      ? `<p class="picker-sub">Couldn't find your dates in the plan, so the full trip is showing.</p>`
-      : `<button type="button" class="picker-btn" data-act="ours"${!showFullTrip ? ' aria-pressed="true"' : ''}>
-          <span>Just our days</span><span class="picker-range">${ours}</span></button>
-         <button type="button" class="picker-btn alt" data-act="full"${showFullTrip ? ' aria-pressed="true"' : ''}>
-          <span>Full trip</span><span class="picker-range">All ${STATE.days.length} days</span></button>`}
-    <button type="button" class="picker-skip" data-act="change">Not ${escapeHtml(g.label)}? Change</button>
-  </div>`;
-  el.hidden = false;
-  el.querySelectorAll('button[data-act]').forEach((btn) => btn.addEventListener('click', () => {
-    const act = btn.dataset.act;
-    if (act === 'change') { showGroupPicker(); return; }
-    showFullTrip = act === 'full';
-    closeOverlay();
-    STATE.currentDayIdx = pickInitialDayIndex(STATE.days);
-    renderCurrentScreen();
-    window.scrollTo(0, 0);
-  }));
-}
 
 /*
  * Couple chip lives in the pinned header (never scrolls away). Shown on Today and
- * Overview in place of the title; other screens keep their normal title.
+ * Overview in place of the title; tapping it lets them switch couple.
  */
 function renderGroupBar() {
   const chip = document.getElementById('group-chip');
   const title = document.getElementById('topbar-title');
   const g = currentGroup();
-  // Friends mode: opened via the friends link, or a choice (incl. "full trip") was saved on this phone.
-  const friendsMode = Boolean(g || FRIENDS_LINK || loadSavedRaw());
-  const show = friendsMode && (currentScreen === 'today' || currentScreen === 'overview');
+  const show = isFriendsMode() && (currentScreen === 'today' || currentScreen === 'overview');
   chip.hidden = !show;
   title.hidden = Boolean(show);
   if (!show) return;
   if (!g) {
-    // No couple chosen ("Just show the full trip"): keep a way back to the filter.
-    chip.innerHTML = `<span class="gc-name">👥 Full trip</span><span class="gc-range">Pick your days ▾</span>`;
+    chip.innerHTML = `<span class="gc-name">👋 Who are you?</span><span class="gc-range">Pick your days ▾</span>`;
     return;
   }
-  const vis = visibleIdx();
-  const range = showFullTrip || groupDatesMissing()
-    ? 'Full trip'
-    : shortRange(STATE.days[vis[0]].date, STATE.days[vis[vis.length - 1]].date);
-  chip.innerHTML = `<span class="gc-name">👋 ${escapeHtml(g.label)}</span><span class="gc-range">${escapeHtml(range)} ▾</span>`;
+  chip.innerHTML = `<span class="gc-name">👋 ${escapeHtml(g.label)}</span><span class="gc-range">${escapeHtml(shortRange(g.from, g.to))} ▾</span>`;
 }
 
 function renderToday() {
   renderGroupBar();
   renderCountdownBanner();
   renderDayStrip();
+  if (!visibleIdx().includes(STATE.currentDayIdx)) {
+    // Friends mode with no couple picked yet, or their dates aren't in the plan: show no days.
+    const g = currentGroup();
+    document.getElementById('day-header').innerHTML = g
+      ? `<p class="title">No days to show</p><p class="locations">Couldn't find ${escapeHtml(g.label)}'s dates in the plan yet.</p>`
+      : `<p class="title">Who are you?</p><p class="locations">Tap the button at the top to pick your days.</p>`;
+    document.getElementById('timeline').innerHTML = '';
+    return;
+  }
   const d = STATE.days[STATE.currentDayIdx];
   renderDayHeader(d);
   renderTimeline(d);
@@ -603,9 +583,7 @@ async function boot() {
   applyData(await loadLocalCSV());
   renderToday();
   renderSyncFooter();
-  let saved = null;
-  try { saved = localStorage.getItem(GROUP_KEY); } catch (_) { /* ignore */ }
-  if (FRIENDS_LINK && !saved) showGroupPicker();
+  if (isFriendsMode() && !currentGroup()) showGroupPicker();
 
   // 2. Then check the sheet in the background (8s timeout).
   refreshFromSheet();
