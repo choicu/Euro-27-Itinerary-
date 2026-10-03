@@ -1,0 +1,262 @@
+{
+  "emergency": [
+    {
+      "label": "EU-wide emergency number (police/fire/ambulance)",
+      "value": "112 — free, works from any phone in Italy, Greece, Belgium and the Netherlands",
+      "source": "https://europa.eu/youreurope/citizens/travel/security-and-emergencies/emergency/index_en.htm",
+      "verified": "2026-10-03"
+    },
+    {
+      "label": "Smartraveller 24-hour Consular Emergency Centre (Canberra)",
+      "value": "1300 555 135 (within Australia) / +61 2 6261 3305 (from overseas) — for Australians with serious/urgent needs abroad",
+      "source": "https://www.smartraveller.gov.au/i-need-urgent-help",
+      "verified": "2026-10-03"
+    },
+    {
+      "label": "Australian Embassy, Rome (Italy)",
+      "value": "Via Antonio Bosio 5, 00161 Rome. Tel +39 06 8527 21 (Mon–Fri, by appointment for passport/consular). Also covers Milan Consulate-General: +39 02 7767 4200",
+      "source": "https://italy.embassy.gov.au/rome/769.html",
+      "verified": "2026-10-03"
+    },
+    {
+      "label": "Australian Embassy, Athens (Greece)",
+      "value": "Level 2, 5 Hatziyianni Mexi Street, Athens 11528. Tel +30 210 870 4000 (Mon–Fri 08:00–16:00)",
+      "source": "https://greece.embassy.gov.au/athn/contact-us.html",
+      "verified": "2026-10-03"
+    },
+    {
+      "label": "Australian Embassy, Brussels (Belgium)",
+      "value": "Avenue des Arts/Kunstlaan 56, 1000 Brussels. Tel +32 (0)2 286 0500. Covers Belgium and Luxembourg",
+      "source": "https://belgium.embassy.gov.au/bsls/consular.html",
+      "verified": "2026-10-03"
+    },
+    {
+      "label": "Australian Embassy, The Hague (Netherlands)",
+      "value": "Carnegielaan 4, 2517 KH The Hague. Tel +31 (0)70 310 8200",
+      "source": "https://netherlands.embassy.gov.au/thag/consular.html",
+      "verified": "2026-10-03"
+    }
+  ],
+  "countries": {
+    "Italy": {
+      "currency": {
+        "value": "Euro (EUR). ATMs are widely available; smaller towns and markets often prefer cash",
+        "source": "https://www.smartraveller.gov.au/destinations/europe/italy",
+        "verified": "2026-10-03"
+      },
+      "plug": {
+        "value": "Type C, F and L sockets, 230V/50Hz. Most modern chargers (phone/laptop) are dual-voltage and only need a plug adapter",
+        "source": "https://www.power-plugs-sockets.com/us/italy/",
+        "verified": "2026-10-03"
+      },
+      "tipping": {
+        "value": "Not expected — most restaurants already add a service charge (coperto/servizio) to the bill. If you do leave something extra, €1–2 per person rounded up in cash is plenty; there's no line to add a tip on a card receipt",
+        "source": "https://community.ricksteves.com/travel-forum/italy/proper-tipping-etiquette-how-not-how-much",
+        "verified": "2026-10-03"
+      },
+      "phrases": [
+        { "en": "Hello", "local": "Ciao / Salve", "source": "https://www.theintrepidguide.com/italian-phrases-for-travellers/", "verified": "2026-10-03" },
+        { "en": "Thank you", "local": "Grazie", "source": "https://www.theintrepidguide.com/italian-phrases-for-travellers/", "verified": "2026-10-03" },
+        { "en": "Please", "local": "Per favore", "source": "https://www.theintrepidguide.com/italian-phrases-for-travellers/", "verified": "2026-10-03" },
+        { "en": "The bill, please", "local": "Il conto, per favore", "source": "https://www.theintrepidguide.com/italian-phrases-for-travellers/", "verified": "2026-10-03" },
+        { "en": "Where is...?", "local": "Dov'è...?", "source": "https://www.theintrepidguide.com/italian-phrases-for-travellers/", "verified": "2026-10-03" },
+        { "en": "Do you speak English?", "local": "Parla inglese?", "source": "https://www.theintrepidguide.com/italian-phrases-for-travellers/", "verified": "2026-10-03" }
+      ]
+    },
+    "Greece": {
+      "currency": {
+        "value": "Euro (EUR)",
+        "source": "https://www.smartraveller.gov.au/destinations/europe/greece",
+        "verified": "2026-10-03"
+      },
+      "plug": {
+        "value": "Type C and F sockets, 230V/50Hz. Australian travellers need a plug adapter; most electronics are dual-voltage",
+        "source": "https://esim.holafly.com/travel-tips/greece-plug-type/",
+        "verified": "2026-10-03"
+      },
+      "tipping": {
+        "value": "Not obligatory — staff are paid a wage regardless. Rounding up the bill or leaving 10–15% in tavernas is a common token of appreciation; closer to 20% (left as banknotes) at high-end restaurants",
+        "source": "https://community.ricksteves.com/travel-forum/greece/how-to-tip-in-greece",
+        "verified": "2026-10-03"
+      },
+      "phrases": [
+        { "en": "Hello", "local": "Γεία σου / Γεία σας (ya sou / ya sas)", "source": "https://www.fluentin3months.com/greek-phrases/", "verified": "2026-10-03" },
+        { "en": "Thank you", "local": "Ευχαριστώ (efharistó)", "source": "https://www.fluentin3months.com/greek-phrases/", "verified": "2026-10-03" },
+        { "en": "Please", "local": "Παρακαλώ (parakaló)", "source": "https://www.fluentin3months.com/greek-phrases/", "verified": "2026-10-03" },
+        { "en": "The bill, please", "local": "Τον λογαριασμό, παρακαλώ (ton logariasmó, parakaló)", "source": "https://greektriplanner.me/blog/greek-phrases", "verified": "2026-10-03" },
+        { "en": "Where is...?", "local": "Πού είναι...; (pou íne...?)", "source": "https://www.fluentin3months.com/greek-phrases/", "verified": "2026-10-03" },
+        { "en": "Do you speak English?", "local": "Μιλάτε αγγλικά; (miláte angliká?)", "source": "https://www.fluentin3months.com/greek-phrases/", "verified": "2026-10-03" }
+      ]
+    },
+    "Belgium": {
+      "currency": {
+        "value": "Euro (EUR)",
+        "source": "https://www.smartraveller.gov.au/destinations/europe/belgium",
+        "verified": "2026-10-03"
+      },
+      "plug": {
+        "value": "Type C and E sockets, 230V/50Hz. Australian travellers need a plug adapter",
+        "source": "https://www.power-plugs-sockets.com/us/belgium/",
+        "verified": "2026-10-03"
+      },
+      "tipping": {
+        "value": "Not mandatory — service is included in prices. Rounding up or leaving ~10% for good service is appreciated, especially in Wallonia (French-speaking); less customary in Flanders (Dutch-speaking, where Tomorrowland/Boom is)",
+        "source": "https://tippingin.com/en/how-much-to-tip-in-belgium",
+        "verified": "2026-10-03"
+      },
+      "phrases": [
+        { "en": "Hello (Dutch/Flemish — Boom/Antwerp area)", "local": "Hallo", "source": "https://www.omniglot.com/language/phrases/dutch.php", "verified": "2026-10-03" },
+        { "en": "Thank you", "local": "Dank u wel (formal) / Dank je wel (informal)", "source": "https://www.omniglot.com/language/phrases/dutch.php", "verified": "2026-10-03" },
+        { "en": "Please", "local": "Alstublieft (formal) / Alsjeblieft (informal)", "source": "https://www.omniglot.com/language/phrases/dutch.php", "verified": "2026-10-03" },
+        { "en": "Where is...?", "local": "Waar is de WC? (example: where is the toilet)", "source": "https://www.omniglot.com/language/phrases/dutch.php", "verified": "2026-10-03" },
+        { "en": "Do you speak English?", "local": "Spreekt u Engels? (formal) / Spreek je Engels? (informal)", "source": "https://www.omniglot.com/language/phrases/dutch.php", "verified": "2026-10-03" },
+        { "en": "Hello (French — Brussels/Wallonia)", "local": "Bonjour", "source": "https://www.brussels.info/french-phrases/", "verified": "2026-10-03" },
+        { "en": "The bill, please (French)", "local": "L'addition s'il vous plaît", "source": "https://www.brussels.info/french-phrases/", "verified": "2026-10-03" }
+      ]
+    },
+    "Netherlands": {
+      "currency": {
+        "value": "Euro (EUR)",
+        "source": "https://www.smartraveller.gov.au/destinations/europe/netherlands",
+        "verified": "2026-10-03"
+      },
+      "plug": {
+        "value": "Type C and F sockets, 230V/50Hz. Australian travellers need a plug adapter",
+        "source": "https://www.travel-adaptor.com/countries/plug-adapters/gb/Netherlands.php",
+        "verified": "2026-10-03"
+      },
+      "tipping": {
+        "value": "Appreciated but not expected — staff are paid properly regardless. Rounding up the bill, or ~5–10% for good service, is the norm",
+        "source": "https://wise.com/us/travel-money/tip-calculator/netherlands",
+        "verified": "2026-10-03"
+      },
+      "phrases": [
+        { "en": "Hello", "local": "Hallo", "source": "https://www.omniglot.com/language/phrases/dutch.php", "verified": "2026-10-03" },
+        { "en": "Thank you", "local": "Dank u wel (formal) / Dank je wel (informal)", "source": "https://www.omniglot.com/language/phrases/dutch.php", "verified": "2026-10-03" },
+        { "en": "Please", "local": "Alstublieft (formal) / Alsjeblieft (informal)", "source": "https://www.omniglot.com/language/phrases/dutch.php", "verified": "2026-10-03" },
+        { "en": "The bill, please", "local": "Mag ik de rekening, alstublieft?", "source": "https://www.listenandlearnusa.com/blog/dutch-phrases/", "verified": "2026-10-03" },
+        { "en": "Where is...?", "local": "Waar is...?", "source": "https://www.listenandlearnusa.com/blog/dutch-phrases/", "verified": "2026-10-03" },
+        { "en": "Do you speak English?", "local": "Spreekt u Engels? (formal) / Spreek je Engels? (informal)", "source": "https://www.omniglot.com/language/phrases/dutch.php", "verified": "2026-10-03" }
+      ]
+    }
+  },
+  "transport": [
+    {
+      "name": "Trenitalia",
+      "url": "https://www.trenitalia.com/en.html",
+      "note": "Italy's national rail operator — tickets and schedules for intercity/high-speed trains, English-language site",
+      "source": "https://www.trenitalia.com/en.html",
+      "verified": "2026-10-03"
+    },
+    {
+      "name": "EAV / Campania Express",
+      "url": "https://www.eavsrl.it/campania-express/",
+      "note": "Regional rail operator for the Naples–Sorrento (Circumvesuviana) line and the tourist-oriented Campania Express service",
+      "source": "https://www.eavsrl.it/campania-express/",
+      "verified": "2026-10-03"
+    },
+    {
+      "name": "Ferryhopper",
+      "url": "https://www.ferryhopper.com/en/",
+      "note": "Booking platform comparing Greek ferry operators and routes across the Aegean",
+      "source": "https://www.ferryhopper.com/en/",
+      "verified": "2026-10-03"
+    },
+    {
+      "name": "Seajets",
+      "url": "https://www.seajets.com/",
+      "note": "Greek high-speed ferry operator serving Piraeus/Rafina/Lavrio to the Cyclades and other Aegean islands",
+      "source": "https://www.seajets.com/contact",
+      "verified": "2026-10-03"
+    },
+    {
+      "name": "NS International",
+      "url": "https://www.nsinternational.com/en/belgium",
+      "note": "Dutch railway's international arm — direct Intercity/Eurostar trains between the Netherlands and Belgium",
+      "source": "https://www.nsinternational.com/en/belgium",
+      "verified": "2026-10-03"
+    }
+  ],
+  "tomorrowland": [
+    {
+      "label": "Official site",
+      "url": "https://www.tomorrowland.com",
+      "source": "https://en.wikipedia.org/wiki/Tomorrowland_(festival)",
+      "verified": "2026-10-03"
+    },
+    {
+      "label": "Official FAQ / practical info (Dreamville accommodation FAQ)",
+      "url": "https://www.tomorrowland.com/en/dreamville/faq",
+      "source": "https://myhautelife.com/travel/tomorrowland-faqs/",
+      "verified": "2026-10-03"
+    }
+  ],
+  "weather": [
+    {
+      "city": "Rome",
+      "url": "https://weather.com/weather/monthly/l/1d1a251383dc0d1bdbfb8efbc155374b376eff6f5232f36110b823e47362866e",
+      "source": "https://weather.com/weather/monthly/l/1d1a251383dc0d1bdbfb8efbc155374b376eff6f5232f36110b823e47362866e",
+      "verified": "2026-10-03"
+    },
+    {
+      "city": "Tuscany / Cortona",
+      "url": "https://weather.com/weather/monthly/l/13440489c8b38344b6cb7e875e5105928cadc7474669aba26f5d990e18563f4f",
+      "source": "https://weather.com/weather/monthly/l/13440489c8b38344b6cb7e875e5105928cadc7474669aba26f5d990e18563f4f",
+      "verified": "2026-10-03"
+    },
+    {
+      "city": "Sorrento",
+      "url": "https://weather.com/weather/monthly/l/Sorrento+Naples+Italy?canonicalCityId=e133f017003d592fba6cf5f5c92c899c69015c011200a1cabf6af85dbd9fb20c",
+      "source": "https://weather.com/weather/monthly/l/Sorrento+Naples+Italy?canonicalCityId=e133f017003d592fba6cf5f5c92c899c69015c011200a1cabf6af85dbd9fb20c",
+      "verified": "2026-10-03"
+    },
+    {
+      "city": "Positano",
+      "url": "https://weather.com/weather/monthly/l/Positano+Salerno+Italy?canonicalCityId=f65fe8830f99dec35969f44a7bc28da820cb86287d62a16710abfdbdbe6f2237",
+      "source": "https://weather.com/weather/monthly/l/Positano+Salerno+Italy?canonicalCityId=f65fe8830f99dec35969f44a7bc28da820cb86287d62a16710abfdbdbe6f2237",
+      "verified": "2026-10-03"
+    },
+    {
+      "city": "Capri",
+      "url": "https://weather.com/weather/monthly/l/Capri+Naples+Italy?canonicalCityId=48c81b7c44194db6cc49167ea30e17fe",
+      "source": "https://weather.com/weather/monthly/l/Capri+Naples+Italy?canonicalCityId=48c81b7c44194db6cc49167ea30e17fe",
+      "verified": "2026-10-03"
+    },
+    {
+      "city": "Mykonos",
+      "url": "https://weather.com/weather/monthly/l/ff31776cb11644c6af004f381bf0cd0f5249cb3dbf55df98a3c396a03efef378",
+      "source": "https://weather.com/weather/monthly/l/ff31776cb11644c6af004f381bf0cd0f5249cb3dbf55df98a3c396a03efef378",
+      "verified": "2026-10-03"
+    },
+    {
+      "city": "Paros",
+      "url": "https://weather.com/weather/monthly/l/Paros+South+Aegean+Greece?canonicalCityId=b2ead8839081ab5f9aa3895f3a224169",
+      "source": "https://weather.com/weather/monthly/l/Paros+South+Aegean+Greece?canonicalCityId=b2ead8839081ab5f9aa3895f3a224169",
+      "verified": "2026-10-03"
+    },
+    {
+      "city": "Milos",
+      "url": "https://weather.com/weather/monthly/l/f76bba8a456ec68db25fcc05bd3ed02aadaa45dccc2dfb548a7c75e119d4f8c7",
+      "source": "https://weather.com/weather/monthly/l/f76bba8a456ec68db25fcc05bd3ed02aadaa45dccc2dfb548a7c75e119d4f8c7",
+      "verified": "2026-10-03"
+    },
+    {
+      "city": "Amsterdam",
+      "url": "https://weather.com/weather/monthly/l/a0a48c0f8630d7e60cc5d03bf2dc2d039cad87e8dfdb8fc476a43473a6ff7e17",
+      "source": "https://weather.com/weather/monthly/l/a0a48c0f8630d7e60cc5d03bf2dc2d039cad87e8dfdb8fc476a43473a6ff7e17",
+      "verified": "2026-10-03"
+    },
+    {
+      "city": "Brussels",
+      "url": "https://weather.com/weather/monthly/l/b57f62604ec9d13bd00117589e57e12d92a160c076d7fc08515f30c1b975f727",
+      "source": "https://weather.com/weather/monthly/l/b57f62604ec9d13bd00117589e57e12d92a160c076d7fc08515f30c1b975f727",
+      "verified": "2026-10-03"
+    },
+    {
+      "city": "Antwerp (nearest major city to Tomorrowland, Boom)",
+      "url": "https://weather.com/weather/monthly/l/Antwerp+Antwerp+Belgium?canonicalCityId=e9f63ebebba502c7f8738c7883e16d39",
+      "source": "https://weather.com/weather/monthly/l/Antwerp+Antwerp+Belgium?canonicalCityId=e9f63ebebba502c7f8738c7883e16d39",
+      "verified": "2026-10-03"
+    }
+  ]
+}

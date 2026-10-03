@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Europe 2027</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <meta name="theme-color" content="#3f8fa6">
+  <link rel="icon" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="topbar">
+    <h1 id="topbar-title">Europe 2027</h1>
+  </div>
+
+  <div id="screen-today" class="screen active">
+    <div id="countdown-banner"></div>
+    <div class="day-strip" id="day-strip"></div>
+    <div class="day-nav-arrows">
+      <button id="day-prev" aria-label="Previous day">‹ Prev</button>
+      <button id="day-next" aria-label="Next day">Next ›</button>
+    </div>
+    <div class="day-header" id="day-header"></div>
+    <div class="timeline" id="timeline"></div>
+  </div>
+
+  <div id="screen-overview" class="screen">
+    <div id="overview-list" style="padding-top: 8px;"></div>
+  </div>
+
+  <div id="screen-places" class="screen">
+    <div class="places-filter" id="places-filter"></div>
+    <div id="places-list"></div>
+  </div>
+
+  <div id="screen-handy" class="screen">
+    <div id="handy-list" style="padding: 8px 16px;"></div>
+  </div>
+
+  <div class="sync-footer" id="sync-footer">Loading…</div>
+
+  <nav class="bottom-nav">
+    <button data-screen="today" class="active"><span class="ic">📅</span>Today</button>
+    <button data-screen="overview"><span class="ic">🗺️</span>Overview</button>
+    <button data-screen="places"><span class="ic">📍</span>Places</button>
+    <button data-screen="handy"><span class="ic">ℹ️</span>Handy</button>
+  </nav>
+
+  <script type="module" src="app.js"></script>
+</body>
+</html>
