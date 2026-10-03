@@ -1,6 +1,6 @@
-const CACHE_VERSION = 'v1';
+// Bump CACHE_VERSION on every app-shell change so phones pick up the update.
+const CACHE_VERSION = 'v2';
 const SHELL_CACHE = `europe2027-shell-${CACHE_VERSION}`;
-const DATA_CACHE = `europe2027-data-${CACHE_VERSION}`;
 
 const SHELL_FILES = [
   './',
@@ -24,36 +24,22 @@ self.addEventListener('install', (event) => {
 self.addEventListener('activate', (event) => {
   event.waitUntil(
     caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== SHELL_CACHE && k !== DATA_CACHE).map((k) => caches.delete(k)))
+      Promise.all(keys.filter((k) => k !== SHELL_CACHE).map((k) => caches.delete(k)))
     ).then(() => self.clients.claim())
   );
 });
-
-function isDataRequest(url) {
-  return url.hostname.includes('docs.google.com') || url.hostname.includes('googleusercontent.com');
-}
 
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   if (request.method !== 'GET') return;
   const url = new URL(request.url);
 
-  if (isDataRequest(url)) {
-    // Network-first for live sheet data, fall back to cache.
-    event.respondWith(
-      fetch(request).then((res) => {
-        const copy = res.clone();
-        caches.open(DATA_CACHE).then((cache) => cache.put(request, copy));
-        return res;
-      }).catch(() => caches.match(request))
-    );
-    return;
-  }
+  // Live sheet data is NOT handled here: data.js caches it itself (with its real
+  // fetch time), so an offline phone never mislabels an old copy as "just updated".
+  if (url.origin !== self.location.origin) return;
 
-  if (url.origin === self.location.origin) {
-    // Cache-first for the app shell.
-    event.respondWith(
-      caches.match(request).then((cached) => cached || fetch(request))
-    );
-  }
+  // App shell: cache-first, fall back to network.
+  event.respondWith(
+    caches.match(request, { ignoreSearch: true }).then((cached) => cached || fetch(request))
+  );
 });

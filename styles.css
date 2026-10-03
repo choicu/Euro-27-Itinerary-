@@ -7,7 +7,7 @@
   --sea-deep: #2c6d82;
   --olive: #7fa06a;
   --ink: #2c2a27;
-  --ink-soft: #78746d;
+  --ink-soft: #5f5b54;
   --border: #e6e4de;
   --chip-bg: #e8f2f1;
   --chip-text: #2c6d82;
@@ -98,7 +98,7 @@ body {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
-  padding-bottom: 72px; /* room for bottom nav */
+  padding-bottom: calc(80px + env(safe-area-inset-bottom)); /* room for bottom nav */
 }
 
 a { color: inherit; }
@@ -114,8 +114,49 @@ button {
   top: 0;
   z-index: 10;
   background: var(--bg);
-  padding: 14px 16px 8px;
+  padding: max(10px, env(safe-area-inset-top)) 0 0;
+  border-bottom: 1px solid var(--border);
 }
+
+.topbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 16px 8px;
+  min-height: 44px;
+}
+
+.day-nav { display: flex; gap: 6px; }
+
+.day-nav button {
+  min-width: 44px;
+  height: 44px;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  border-radius: 12px;
+  font-size: 22px;
+  line-height: 1;
+  color: var(--primary);
+  box-shadow: var(--card-shadow);
+}
+
+.day-nav button:disabled { opacity: 0.35; }
+
+.day-nav .today-btn {
+  font-size: 14px;
+  font-weight: 700;
+  padding: 0 12px;
+  background: var(--secondary);
+  border-color: var(--secondary);
+  color: #fff;
+}
+
+.day-nav .today-btn[hidden] { display: none; }
+
+/* Day strip and day controls only on the Today screen */
+body:not(.on-today) .day-nav,
+body:not(.on-today) .day-strip { display: none; }
 
 .topbar h1 {
   margin: 0;
@@ -127,14 +168,22 @@ button {
 }
 
 .sync-footer {
-  font-size: 12px;
+  display: block;
+  width: 100%;
+  min-height: 44px;
+  text-align: left;
+  border: none;
+  background: none;
+  font-size: 12.5px;
   color: var(--text-soft);
-  padding: 2px 16px 10px;
+  padding: 8px 16px 12px;
 }
+
+.sync-footer:disabled { cursor: default; }
 
 /* ---------- Countdown banner ---------- */
 .countdown-banner {
-  margin: 0 16px 12px;
+  margin: 12px 16px 4px;
   padding: 14px 16px;
   border-radius: 14px;
   background: linear-gradient(135deg, var(--primary), var(--primary-deep));
@@ -149,7 +198,7 @@ button {
   display: flex;
   gap: 8px;
   overflow-x: auto;
-  padding: 4px 16px 12px;
+  padding: 2px 16px 10px;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
 }
@@ -165,6 +214,7 @@ button {
   padding: 8px 12px;
   text-align: center;
   min-width: 58px;
+  min-height: 48px;
   color: var(--text);
 }
 
@@ -177,25 +227,9 @@ button {
   background: var(--accent-stay-bg);
 }
 
-.day-nav-arrows {
-  display: flex;
-  justify-content: space-between;
-  padding: 0 16px 4px;
-}
-
-.day-nav-arrows button {
-  border: none;
-  background: var(--surface);
-  border-radius: 10px;
-  padding: 8px 14px;
-  font-size: 16px;
-  color: var(--primary);
-  box-shadow: var(--card-shadow);
-}
-
 /* ---------- Day header ---------- */
 .day-header {
-  padding: 4px 16px 10px;
+  padding: 14px 16px 10px;
 }
 
 .day-header .title {
@@ -282,30 +316,31 @@ button {
 }
 
 .card .notes {
-  font-size: 13px;
+  font-size: 14px;
   color: var(--text-soft);
   margin-top: 4px;
 }
 
 .card .logistics {
-  font-size: 12.5px;
+  font-size: 13.5px;
   color: var(--secondary);
   margin-top: 6px;
   font-weight: 600;
 }
 
-.card .map-btn {
+.map-btn {
   display: inline-flex;
   align-items: center;
   gap: 4px;
   margin-top: 8px;
-  font-size: 12.5px;
+  min-height: 44px;
+  font-size: 14px;
   font-weight: 700;
   color: var(--primary);
   text-decoration: none;
   border: 1px solid var(--primary);
   border-radius: 999px;
-  padding: 5px 12px;
+  padding: 0 16px;
 }
 
 /* ---------- Overview ---------- */
@@ -345,6 +380,7 @@ button {
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: 999px;
+  min-height: 40px;
   padding: 6px 14px;
   font-size: 13px;
   font-weight: 600;
@@ -480,7 +516,19 @@ button {
   gap: 8px;
 }
 
+.tel-link {
+  color: var(--primary);
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  white-space: nowrap;
+  padding: 6px 0; /* larger tap area without changing layout much */
+}
+
 .weather-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: 999px;

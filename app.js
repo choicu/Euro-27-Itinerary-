@@ -1,4 +1,4 @@
-import { loadItineraryCSV, parseItinerary } from './data.js';
+import { loadLocalCSV, fetchLiveCSV, parseItinerary } from './data.js';
 
 const TRIP_START = new Date(2027, 5, 30); // 30 Jun 2027
 const TRIP_END = new Date(2027, 6, 31);   // 31 Jul 2027
@@ -26,6 +26,22 @@ function pickInitialDayIndex(days) {
 
 function sameDate(a, b) {
   return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
+}
+
+/** Index of today's day during the trip, else -1. */
+function todayDayIndex() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  if (today < TRIP_START || today > TRIP_END) return -1;
+  return STATE.days.findIndex((d) => d.date && sameDate(d.date, today));
+}
+
+/** Change day: re-render and start at the top of the new day. */
+function goToDay(idx) {
+  if (idx < 0 || idx >= STATE.days.length) return;
+  STATE.currentDayIdx = idx;
+  renderToday();
+  window.scrollTo(0, 0);
 }
 
 function daysUntilTrip() {
@@ -57,13 +73,17 @@ function renderDayStrip() {
     </button>`;
   }).join('');
   strip.querySelectorAll('.day-chip').forEach((btn) => {
-    btn.addEventListener('click', () => {
-      STATE.currentDayIdx = parseInt(btn.dataset.idx, 10);
-      renderToday();
-    });
+    btn.addEventListener('click', () => goToDay(parseInt(btn.dataset.idx, 10)));
   });
+  // Centre the active chip horizontally only (never scrolls the page vertically).
   const activeChip = strip.querySelector('.day-chip.active');
-  if (activeChip) activeChip.scrollIntoView({ inline: 'center', block: 'nearest' });
+  if (activeChip) {
+    strip.scrollTo({ left: activeChip.offsetLeft - (strip.clientWidth - activeChip.offsetWidth) / 2 });
+  }
+  document.getElementById('day-prev').disabled = STATE.currentDayIdx === 0;
+  document.getElementById('day-next').disabled = STATE.currentDayIdx === STATE.days.length - 1;
+  const ti = todayDayIndex();
+  document.getElementById('day-today').hidden = ti === -1 || ti === STATE.currentDayIdx;
 }
 
 function dayDateLabel(d) {
@@ -91,7 +111,7 @@ function cardHtml(card) {
       </div>
       ${card.notes ? `<div class="notes">${escapeHtml(card.notes)}</div>` : ''}
       ${card.logistics ? `<div class="logistics">🧭 ${escapeHtml(card.logistics)}</div>` : ''}
-      <a class="map-btn" href="${card.url}" target="_blank" rel="noopener">📍 ${card.linkLabel ? 'Map' : 'Search map'}</a>
+      ${card.hasLink ? `<a class="map-btn" href="${card.url}" target="_blank" rel="noopener">📍 Map</a>` : ''}
     </div>
   `;
 }
@@ -116,13 +136,14 @@ function renderTimeline(d) {
 function renderSyncFooter() {
   const el = document.getElementById('sync-footer');
   const { source, fetchedAt } = STATE;
-  if (source === 'live') {
-    el.textContent = `Updated ${new Date(fetchedAt).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' })} from sheet`;
-  } else if (source === 'cache') {
-    el.textContent = `Offline — showing saved copy from ${fetchedAt ? new Date(fetchedAt).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' }) : 'earlier'}`;
-  } else {
-    el.textContent = 'Offline — showing bundled starting copy';
-  }
+  const when = fetchedAt ? new Date(fetchedAt).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' }) : null;
+  let text;
+  if (refreshing) text = 'Checking sheet for updates…';
+  else if (source === 'live') text = `Updated ${when} from sheet`;
+  else if (source === 'cache') text = `Offline — showing saved copy from ${when || 'earlier'}`;
+  else text = 'Offline — showing bundled starting copy';
+  el.textContent = refreshing ? text : `${text} · ↻ Tap to refresh`;
+  el.disabled = refreshing;
 }
 
 function renderToday() {
@@ -163,9 +184,8 @@ function renderOverview() {
   list.querySelectorAll('.overview-block').forEach((el) => {
     el.addEventListener('click', () => {
       const day = parseInt(el.dataset.start, 10);
-      STATE.currentDayIdx = STATE.days.findIndex((d) => d.day === day);
       showScreen('today');
-      renderToday();
+      goToDay(STATE.days.findIndex((d) => d.day === day));
     });
   });
 }
@@ -207,6 +227,19 @@ function renderPlacesList() {
 
 let HANDY = null;
 
+/**
+ * Escape text, then turn phone numbers into tap-to-call links. Display text is unchanged.
+ * Matches: 112, Australian 1300 numbers, and international +NN numbers.
+ * The "(0)" trunk prefix is dropped from the dialled number only (+32 (0)2 → +322).
+ */
+const PHONE_RE = /(\+\d[\d ()]{6,}\d|\b1300 \d{3} \d{3}\b|\b112\b)/g;
+function linkifyPhones(text) {
+  return escapeHtml(text).replace(PHONE_RE, (m) => {
+    const dial = m.replace(/\(0\)/g, '').replace(/[^\d+]/g, '');
+    return `<a class="tel-link" href="tel:${dial}">${m}</a>`;
+  });
+}
+
 function sourceLine(item) {
   if (!item || !item.source) return '';
   return `<a class="source-link" href="${item.source}" target="_blank" rel="noopener">source, verified ${escapeHtml(item.verified || '')}</a>`;
@@ -225,7 +258,7 @@ function renderHandy() {
       ${HANDY.emergency.map((e) => `
         <div class="handy-item">
           <div class="handy-label">${escapeHtml(e.label)}</div>
-          <div class="handy-value">${escapeHtml(e.value)}</div>
+          <div class="handy-value">${linkifyPhones(e.value)}</div>
           ${sourceLine(e)}
         </div>
       `).join('')}
@@ -296,51 +329,104 @@ function renderHandy() {
 
 /* ---------------- Navigation ---------------- */
 
+let currentScreen = 'today';
+
 function showScreen(name) {
+  currentScreen = name;
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
   document.getElementById(`screen-${name}`).classList.add('active');
   document.querySelectorAll('.bottom-nav button').forEach((b) => b.classList.toggle('active', b.dataset.screen === name));
   const titles = { today: 'Europe 2027', overview: 'Trip Overview', places: 'Places to Try', handy: 'Handy Info' };
   document.getElementById('topbar-title').textContent = titles[name];
+  // Day strip + day controls belong to the Today screen only.
+  document.body.classList.toggle('on-today', name === 'today');
+  window.scrollTo(0, 0);
+}
+
+function renderCurrentScreen() {
+  if (currentScreen === 'today') renderToday();
+  if (currentScreen === 'overview') renderOverview();
+  if (currentScreen === 'places') { renderPlacesFilter(); renderPlacesList(); }
+  if (currentScreen === 'handy') renderHandy();
 }
 
 document.querySelectorAll('.bottom-nav button').forEach((btn) => {
   btn.addEventListener('click', () => {
-    const name = btn.dataset.screen;
-    showScreen(name);
-    if (name === 'overview') renderOverview();
-    if (name === 'places') { renderPlacesFilter(); renderPlacesList(); }
-    if (name === 'handy') renderHandy();
+    showScreen(btn.dataset.screen);
+    renderCurrentScreen();
   });
 });
 
-document.getElementById('day-prev').addEventListener('click', () => {
-  if (STATE.currentDayIdx > 0) { STATE.currentDayIdx--; renderToday(); }
-});
-document.getElementById('day-next').addEventListener('click', () => {
-  if (STATE.currentDayIdx < STATE.days.length - 1) { STATE.currentDayIdx++; renderToday(); }
-});
+document.getElementById('day-prev').addEventListener('click', () => goToDay(STATE.currentDayIdx - 1));
+document.getElementById('day-next').addEventListener('click', () => goToDay(STATE.currentDayIdx + 1));
+document.getElementById('day-today').addEventListener('click', () => goToDay(todayDayIndex()));
 
-let touchStartX = null;
-document.getElementById('screen-today').addEventListener('touchstart', (e) => { touchStartX = e.touches[0].clientX; });
-document.getElementById('screen-today').addEventListener('touchend', (e) => {
-  if (touchStartX === null) return;
-  const dx = e.changedTouches[0].clientX - touchStartX;
-  if (Math.abs(dx) > 50) {
-    if (dx < 0 && STATE.currentDayIdx < STATE.days.length - 1) { STATE.currentDayIdx++; renderToday(); }
-    if (dx > 0 && STATE.currentDayIdx > 0) { STATE.currentDayIdx--; renderToday(); }
+// Swipe between days: only clearly horizontal swipes count, so scrolling down a
+// long day (with a little sideways drift) never flips the day by accident.
+let touchStart = null;
+const todayScreen = document.getElementById('screen-today');
+todayScreen.addEventListener('touchstart', (e) => {
+  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+}, { passive: true });
+todayScreen.addEventListener('touchend', (e) => {
+  if (!touchStart) return;
+  const dx = e.changedTouches[0].clientX - touchStart.x;
+  const dy = e.changedTouches[0].clientY - touchStart.y;
+  touchStart = null;
+  if (Math.abs(dx) < 60 || Math.abs(dx) < 2 * Math.abs(dy)) return;
+  goToDay(STATE.currentDayIdx + (dx < 0 ? 1 : -1));
+}, { passive: true });
+
+/* ---------------- Data load + refresh ---------------- */
+
+let refreshing = false;
+let lastRefreshAttempt = 0;
+
+function applyData({ csvText, source, fetchedAt }) {
+  const { days, places, meta } = parseItinerary(csvText);
+  const keepDay = STATE.days.length ? STATE.days[STATE.currentDayIdx]?.day : null;
+  let idx = keepDay != null ? days.findIndex((d) => d.day === keepDay) : -1;
+  if (idx === -1) idx = pickInitialDayIndex(days);
+  STATE = { days, places, meta, source, fetchedAt, currentDayIdx: idx };
+}
+
+/** Check the sheet in the background. The saved copy stays on screen meanwhile. */
+async function refreshFromSheet() {
+  if (refreshing) return;
+  refreshing = true;
+  lastRefreshAttempt = Date.now();
+  renderSyncFooter();
+  try {
+    applyData(await fetchLiveCSV());
+    renderCurrentScreen();
+  } catch (_) {
+    /* no/weak signal: keep showing the saved copy */
+  } finally {
+    refreshing = false;
+    renderSyncFooter();
   }
-  touchStartX = null;
+}
+
+document.getElementById('sync-footer').addEventListener('click', refreshFromSheet);
+
+// Home-screen apps resume instead of reloading, so re-check when the app comes back.
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible' && Date.now() - lastRefreshAttempt > 2 * 60 * 1000) {
+    refreshFromSheet();
+  }
 });
 
 /* ---------------- Boot ---------------- */
 
 async function boot() {
-  const { csvText, source, fetchedAt } = await loadItineraryCSV();
-  const { days, places, meta } = parseItinerary(csvText);
-  STATE = { days, places, meta, source, fetchedAt, currentDayIdx: pickInitialDayIndex(days) };
+  document.body.classList.add('on-today');
+  // 1. Show the saved copy instantly (works with no signal).
+  applyData(await loadLocalCSV());
   renderToday();
   renderSyncFooter();
+
+  // 2. Then check the sheet in the background (8s timeout).
+  refreshFromSheet();
 
   try {
     const res = await fetch('content/handy.json');
@@ -348,6 +434,12 @@ async function boot() {
   } catch (_) { HANDY = null; }
 
   if ('serviceWorker' in navigator) {
+    // After a site update, reload once so the new version is used straight away.
+    const hadController = Boolean(navigator.serviceWorker.controller);
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (hadController && !reloaded) { reloaded = true; window.location.reload(); }
+    });
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }
 }

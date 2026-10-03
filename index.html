@@ -13,16 +13,19 @@
 </head>
 <body>
   <div class="topbar">
-    <h1 id="topbar-title">Europe 2027</h1>
+    <div class="topbar-row">
+      <h1 id="topbar-title">Europe 2027</h1>
+      <div class="day-nav" id="day-nav">
+        <button id="day-prev" aria-label="Previous day">‹</button>
+        <button id="day-today" class="today-btn" hidden>Today</button>
+        <button id="day-next" aria-label="Next day">›</button>
+      </div>
+    </div>
+    <div class="day-strip" id="day-strip"></div>
   </div>
 
   <div id="screen-today" class="screen active">
     <div id="countdown-banner"></div>
-    <div class="day-strip" id="day-strip"></div>
-    <div class="day-nav-arrows">
-      <button id="day-prev" aria-label="Previous day">‹ Prev</button>
-      <button id="day-next" aria-label="Next day">Next ›</button>
-    </div>
     <div class="day-header" id="day-header"></div>
     <div class="timeline" id="timeline"></div>
   </div>
@@ -40,7 +43,7 @@
     <div id="handy-list" style="padding: 8px 16px;"></div>
   </div>
 
-  <div class="sync-footer" id="sync-footer">Loading…</div>
+  <button class="sync-footer" id="sync-footer" type="button">Loading…</button>
 
   <nav class="bottom-nav">
     <button data-screen="today" class="active"><span class="ic">📅</span>Today</button>

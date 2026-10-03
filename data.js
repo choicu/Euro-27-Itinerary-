@@ -189,6 +189,7 @@ export function parseItinerary(csvText) {
     const card = {
       title, category, icon: iconFor(category),
       notes, logistics, linkLabel: link || null, url,
+      hasLink: Boolean(urlCol || link), // Map button only shown when the sheet's Link/URL is filled
       isStay: isStayCard(category, title),
     };
 
@@ -266,10 +267,23 @@ export function parseItinerary(csvText) {
   };
 }
 
-/** Fetch live CSV; fall back to cache, then bundled snapshot. Returns { csvText, source, fetchedAt }. */
-export async function loadItineraryCSV() {
+/** Instant local copy: last saved sheet data, else the bundled snapshot. Never waits on the network for the sheet. */
+export async function loadLocalCSV() {
   try {
-    const res = await fetch(CSV_URL, { cache: 'no-store' });
+    const cached = localStorage.getItem(CACHE_KEY);
+    const cachedAt = localStorage.getItem(CACHE_TIME_KEY);
+    if (cached) return { csvText: cached, source: 'cache', fetchedAt: cachedAt };
+  } catch (_) { /* storage may be unavailable */ }
+  const res = await fetch(SNAPSHOT_URL);
+  return { csvText: await res.text(), source: 'snapshot', fetchedAt: null };
+}
+
+/** Live sheet fetch with a timeout so weak signal never hangs the app. Throws on failure. */
+export async function fetchLiveCSV(timeoutMs = 8000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+  try {
+    const res = await fetch(CSV_URL, { cache: 'no-store', signal: ctrl.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
     const now = new Date().toISOString();
@@ -278,15 +292,8 @@ export async function loadItineraryCSV() {
       localStorage.setItem(CACHE_TIME_KEY, now);
     } catch (_) { /* storage may be unavailable; not fatal */ }
     return { csvText: text, source: 'live', fetchedAt: now };
-  } catch (err) {
-    try {
-      const cached = localStorage.getItem(CACHE_KEY);
-      const cachedAt = localStorage.getItem(CACHE_TIME_KEY);
-      if (cached) return { csvText: cached, source: 'cache', fetchedAt: cachedAt };
-    } catch (_) { /* ignore */ }
-    const res = await fetch(SNAPSHOT_URL);
-    const text = await res.text();
-    return { csvText: text, source: 'snapshot', fetchedAt: null };
+  } finally {
+    clearTimeout(timer);
   }
 }
 
