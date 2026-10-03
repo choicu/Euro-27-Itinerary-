@@ -15,6 +15,7 @@
   --accent-stay: #3f8fa6;
   --accent-stay-bg: #e7f3f5;
   --today-ring: #e2725b;
+  --on-fill: #ffffff;
 
   --bg: var(--ivory);
   --surface: var(--ivory-raised);
@@ -43,6 +44,7 @@
     --accent-stay: #7ec8d8;
     --accent-stay-bg: #1c343d;
     --today-ring: #f0906f;
+    --on-fill: #10202a;
 
     --bg: var(--ivory);
     --surface: var(--ivory-raised);
@@ -71,6 +73,7 @@
   --accent-stay: #7ec8d8;
   --accent-stay-bg: #1c343d;
   --today-ring: #f0906f;
+  --on-fill: #10202a;
 
   --bg: var(--ivory);
   --surface: var(--ivory-raised);
@@ -149,7 +152,7 @@ button {
   padding: 0 12px;
   background: var(--secondary);
   border-color: var(--secondary);
-  color: #fff;
+  color: var(--on-fill);
 }
 
 .day-nav .today-btn[hidden] { display: none; }
@@ -187,7 +190,7 @@ body:not(.on-today) .day-strip { display: none; }
   padding: 14px 16px;
   border-radius: 14px;
   background: linear-gradient(135deg, var(--primary), var(--primary-deep));
-  color: #fff;
+  color: var(--on-fill);
   font-weight: 600;
   font-size: 15px;
   box-shadow: var(--card-shadow);
@@ -211,7 +214,7 @@ body:not(.on-today) .day-strip { display: none; }
   border: 1px solid var(--border);
   background: var(--surface);
   border-radius: 12px;
-  padding: 8px 12px;
+  padding: 6px 12px;
   text-align: center;
   min-width: 58px;
   min-height: 48px;
@@ -219,7 +222,8 @@ body:not(.on-today) .day-strip { display: none; }
 }
 
 .day-chip .n { display: block; font-weight: 700; font-size: 14px; }
-.day-chip .loc { display: block; font-size: 10px; color: var(--text-soft); margin-top: 2px; white-space: nowrap; }
+.day-chip .dt { display: block; font-size: 11.5px; font-weight: 600; color: var(--secondary); margin-top: 1px; white-space: nowrap; }
+.day-chip .loc { display: block; font-size: 10px; color: var(--text-soft); margin-top: 1px; white-space: nowrap; }
 
 .day-chip.active {
   border-color: var(--today-ring);
@@ -390,7 +394,7 @@ body:not(.on-today) .day-strip { display: none; }
 .filter-chip.active {
   background: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--on-fill);
 }
 
 .place-card {
@@ -597,7 +601,7 @@ body:not(.on-today) .day-strip { display: none; }
   border: none;
   border-radius: 14px;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-fill);
   font-size: 17px;
   font-weight: 700;
 }

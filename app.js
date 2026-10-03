@@ -55,6 +55,24 @@ function fmtTime(d) {
   return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+/** "6 Jul" */
+function shortDate(d) { return d ? `${d.getDate()} ${MON[d.getMonth()]}` : ''; }
+/** "6–28 Jul" or "30 Jun–1 Jul" */
+function shortRange(a, b) {
+  if (!a || !b) return '';
+  if (sameDate(a, b)) return shortDate(a);
+  return a.getMonth() === b.getMonth() ? `${a.getDate()}–${shortDate(b)}` : `${shortDate(a)}–${shortDate(b)}`;
+}
+/** "Day 7–29 · 6–28 Jul" for a list of day objects */
+function dayRangeLabel(days) {
+  if (!days.length) return '';
+  const f = days[0], l = days[days.length - 1];
+  const dayPart = f.day === l.day ? `Day ${f.day}` : `Day ${f.day}–${l.day}`;
+  const datePart = shortRange(f.date, l.date);
+  return datePart ? `${dayPart} · ${datePart}` : dayPart;
+}
+
 function escapeHtml(s) {
   return (s ?? '').replace(/[&<>"']/g, (c) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
@@ -130,7 +148,7 @@ function renderDayStrip() {
     const active = i === STATE.currentDayIdx ? ' active' : '';
     const loc = escapeHtml(d.locations[0] || '');
     return `<button class="day-chip${active}" data-idx="${i}">
-      <span class="n">D${d.day}</span><span class="loc">${loc}</span>
+      <span class="n">D${d.day}</span><span class="dt">${shortDate(d.date)}</span><span class="loc">${loc}</span>
     </button>`;
   }).join('');
   strip.querySelectorAll('.day-chip').forEach((btn) => {
@@ -217,8 +235,7 @@ function showGroupPicker() {
     <p class="picker-title">Who are you? 👋</p>
     <p class="picker-sub">We'll show just your days of the trip. You only need to pick once.</p>
     ${Object.entries(GROUPS).map(([id, g]) => {
-      const vis = STATE.days.filter((d) => d.date && d.date >= g.from && d.date <= g.to);
-      const range = vis.length ? `Day ${vis[0].day}–${vis[vis.length - 1].day}` : '';
+      const range = dayRangeLabel(STATE.days.filter((d) => d.date && d.date >= g.from && d.date <= g.to));
       return `<button type="button" class="picker-btn" data-id="${id}">
         <span>${escapeHtml(g.label)}</span><span class="picker-range">${range}</span></button>`;
     }).join('')}
@@ -248,7 +265,7 @@ function renderGroupBar() {
         <button type="button" data-act="change">Change</button></div>`;
     }
     const vis = visibleIdx();
-    const range = showFullTrip ? 'Full trip' : `Day ${STATE.days[vis[0]].day}–${STATE.days[vis[vis.length - 1]].day}`;
+    const range = showFullTrip ? 'Full trip' : dayRangeLabel(vis.map((i) => STATE.days[i]));
     return `<div class="group-bar">
       <span>👋 <strong>${escapeHtml(g.label)}</strong> · ${range}</span>
       <span class="group-actions">
@@ -286,10 +303,11 @@ function computeBlocks(days) {
   for (const d of days) {
     const key = d.locations.join(' + ') || '—';
     if (!cur || cur.key !== key) {
-      cur = { key, startDay: d.day, endDay: d.day, locations: d.locations };
+      cur = { key, startDay: d.day, endDay: d.day, locations: d.locations, days: [d] };
       blocks.push(cur);
     } else {
       cur.endDay = d.day;
+      cur.days.push(d);
     }
   }
   return blocks;
@@ -300,7 +318,7 @@ function renderOverview() {
   renderGroupBar();
   const blocks = computeBlocks(visibleIdx().map((i) => STATE.days[i]));
   list.innerHTML = blocks.map((b) => {
-    const range = b.startDay === b.endDay ? `Day ${b.startDay}` : `Day ${b.startDay}–${b.endDay}`;
+    const range = dayRangeLabel(b.days);
     return `<div class="overview-block" data-start="${b.startDay}">
       <div class="range">${range}</div>
       <p class="place">${escapeHtml(b.locations.join(' + ') || '—')}</p>
