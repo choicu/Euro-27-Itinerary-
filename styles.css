@@ -618,3 +618,40 @@ body:not(.on-today) .day-strip { display: none; }
 .overview-list { padding-top: 8px; }
 .handy-list { padding: 8px 16px; }
 .muted-note { color: var(--text-soft); font-size: 14px; }
+
+/* ---------- Tonight's stay + Handy "you're here" ---------- */
+.stay-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 6px 6px 6px 12px;
+  border-radius: 12px;
+  background: var(--accent-stay-bg);
+  border: 1px solid var(--accent-stay);
+  font-size: 14px;
+}
+.stay-line .stay-map {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid var(--primary);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+  text-decoration: none;
+}
+.here-badge {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--chip-text);
+  background: var(--chip-bg);
+  border-radius: 999px;
+  padding: 3px 10px;
+  margin-left: 6px;
+  vertical-align: middle;
+}

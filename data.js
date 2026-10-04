@@ -191,6 +191,8 @@ export function parseItinerary(csvText) {
       notes, logistics, linkLabel: link || null, url,
       hasLink: Boolean(urlCol || link), // Map button only shown when the sheet's Link/URL is filled
       isStay: isStayCard(category, title),
+      isCheckIn: /^check[ -]?in/i.test(title) || /^take taxi and check in/i.test(title) || (category === 'Accomodation' && !/^check[ -]?out/i.test(title)),
+      isCheckOut: /^check[ -]?out/i.test(title),
     };
 
     const slotKey = get(col.slot);
@@ -243,6 +245,30 @@ export function parseItinerary(csvText) {
   }
 
   const dayList = Array.from(days.values()).sort((a, b) => a.day - b.day);
+
+  /*
+   * Tonight's stay. The sheet only lists accommodation on check-in days, so:
+   *  - a day with a check-in row  -> stay = the last check-in that day
+   *  - a day with only a check-out -> no stay shown (moving on, not yet in the plan)
+   *  - any other day               -> carry the previous night's stay forward
+   * Name shown = the Link label (usually the hotel name), else the row's text as written.
+   */
+  let carry = null;
+  for (const d of dayList) {
+    const cards = [...d.slots.Morning, ...d.slots.Afternoon, ...d.slots.Evening, ...d.slots.Plans];
+    const checkIns = cards.filter((c) => c.isCheckIn);
+    const hasCheckOut = cards.some((c) => c.isCheckOut);
+    if (checkIns.length) {
+      const c = checkIns[checkIns.length - 1];
+      // Prefer the Link label (hotel name); otherwise drop the leading "Check into" so
+      // "Check into Mykonos Hotel" reads as "Mykonos Hotel". Nothing else is reworded.
+      const fromTitle = c.title.replace(/^(take taxi and )?check[ -]?in(to)?\s*(to\s+)?(-\s*)?/i, '').trim();
+      carry = { name: c.linkLabel || fromTitle || c.title, url: c.hasLink ? c.url : null };
+    } else if (hasCheckOut) {
+      carry = null;
+    }
+    d.stay = carry;
+  }
   for (const d of dayList) {
     d.dateISO = toISODate(d.date);
     if (d.slots.Morning.length === 0 && d.slots.Afternoon.length === 0 &&

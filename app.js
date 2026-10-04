@@ -203,6 +203,7 @@ function renderDayHeader(d) {
     <p class="title">Day ${d.day} · ${escapeHtml(dayDateLabel(d))}</p>
     <p class="locations">${d.locations.map(escapeHtml).join(' → ') || '—'}</p>
     ${chips.length ? `<div class="chips">${chips.map((c) => `<span class="chip">${escapeHtml(c)}</span>`).join('')}</div>` : ''}
+    ${d.stay ? `<div class="stay-line"><span>🛏️ Tonight: <strong>${escapeHtml(d.stay.name)}</strong></span>${d.stay.url ? extLink(d.stay.url, 'stay-map', '📍 Map') : ''}</div>` : ''}
   `;
 }
 
@@ -419,6 +420,30 @@ function sourceLine(item) {
   return extLink(item.source, 'source-link', `source, verified ${escapeHtml(item.verified || '')}`);
 }
 
+/* Which Handy country each itinerary Location belongs to. Edit if new locations are added. */
+const LOCATION_COUNTRY = {
+  Rome: 'Italy', Tuscany: 'Italy', Sorrento: 'Italy', Positano: 'Italy', Capri: 'Italy',
+  Mykonos: 'Greece', Paros: 'Greece', Milos: 'Greece', Athens: 'Greece',
+  Brussels: 'Belgium', Tomorrowland: 'Belgium', Antwerp: 'Belgium', Boom: 'Belgium',
+  Amsterdam: 'Netherlands',
+};
+
+/** Country for today's date (where you end up that day), or null outside the trip / unknown. */
+function currentCountry() {
+  const now = new Date();
+  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const d = STATE.days.find((x) => x.date && sameDate(x.date, today));
+  if (!d || !d.locations.length) return null;
+  return LOCATION_COUNTRY[d.locations[d.locations.length - 1]] || null;
+}
+
+/** Emergency order when in a country: 112 first, then that country's embassy, then the rest. */
+function rankEmergency(e, country) {
+  if (/\b112\b/.test(e.value)) return 0;
+  if (e.label.includes(`(${country})`)) return 1;
+  return 2;
+}
+
 function renderHandy() {
   const el = document.getElementById('handy-list');
   if (!HANDY) {
@@ -426,10 +451,18 @@ function renderHandy() {
     return;
   }
 
+  // Today's country (during the trip only) goes first: its embassy right after 112, its section above the others.
+  const here = currentCountry();
+  const emergency = here
+    ? [...HANDY.emergency].sort((a, b) => rankEmergency(a, here) - rankEmergency(b, here))
+    : HANDY.emergency;
+  const countries = Object.entries(HANDY.countries)
+    .sort(([a], [b]) => (a === here ? -1 : b === here ? 1 : 0));
+
   const emergencyHtml = `
     <section class="handy-section">
       <h2>🚨 Emergency</h2>
-      ${HANDY.emergency.map((e) => `
+      ${emergency.map((e) => `
         <div class="handy-item">
           <div class="handy-label">${escapeHtml(e.label)}</div>
           <div class="handy-value">${linkifyPhones(e.value)}</div>
@@ -439,9 +472,9 @@ function renderHandy() {
     </section>
   `;
 
-  const countryHtml = Object.entries(HANDY.countries).map(([name, c]) => `
+  const countryHtml = countries.map(([name, c]) => `
     <section class="handy-section">
-      <h2>🌍 ${escapeHtml(name)}</h2>
+      <h2>🌍 ${escapeHtml(name)}${name === here ? ' <span class="here-badge">📍 You\'re here</span>' : ''}</h2>
       <div class="handy-item">
         <div class="handy-label">Currency</div>
         <div class="handy-value">${escapeHtml(c.currency.value)}</div>
