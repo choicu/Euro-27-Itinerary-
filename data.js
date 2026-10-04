@@ -77,6 +77,21 @@ function iconFor(category) {
   return CATEGORY_ICON[category] || '';
 }
 
+/**
+ * Travel leg mode for Transit rows (used to draw travel days as a route).
+ * Check-in/out rows are not legs. Returns null for non-travel rows.
+ */
+function travelMode(category, title) {
+  const t = norm(title).toLowerCase();
+  if (category !== 'Transit' || /^check[ -]?(in|out)/.test(t)) return null;
+  if (/\bfly\b|flight/.test(t)) return 'plane';
+  if (/ferry/.test(t)) return 'ferry';
+  if (/train|express|termini|centraal/.test(t)) return 'train';
+  if (/taxi|transfer|shuttle|drive|car\b/.test(t)) return 'car';
+  if (/airport|arrive/.test(t)) return 'plane';
+  return 'route';
+}
+
 function isStayCard(category, title) {
   if (category === 'Accomodation') return true;
   const t = norm(title).toLowerCase();
@@ -167,6 +182,7 @@ export function parseItinerary(csvText) {
 
     const locVal = get(col.location);
     if (locVal && !d.locations.includes(locVal)) d.locations.push(locVal);
+    if (locVal) d.endLocation = locVal; // where the day finishes (last row with a location)
 
     const title = get(col.title);
     const link = get(col.link);
@@ -195,6 +211,7 @@ export function parseItinerary(csvText) {
       isStay: isStayCard(category, title),
       isCheckIn: /^check[ -]?in/i.test(title) || /^take taxi and check in/i.test(title) || (category === 'Accomodation' && !/^check[ -]?out/i.test(title)),
       isCheckOut: /^check[ -]?out/i.test(title),
+      mode: travelMode(category, title),
     };
 
     const slotKey = get(col.slot);

@@ -1,4 +1,5 @@
 import { loadLocalCSV, fetchLiveCSV, parseItinerary } from './data.js';
+import { icon } from './icons.js';
 
 const TRIP_START = new Date(2027, 5, 30); // 30 Jun 2027
 const TRIP_END = new Date(2027, 6, 31);   // 31 Jul 2027
@@ -157,10 +158,8 @@ function renderCountdownBanner() {
   const inGroupView = g && !groupDatesMissing();
   const n = daysUntil(inGroupView ? g.from : TRIP_START);
   if (n > 0) {
-    const msg = inGroupView
-      ? `${n} day${n === 1 ? '' : 's'} until you join us! ✈️`
-      : `${n} day${n === 1 ? '' : 's'} to go — Europe 2027! ✈️`;
-    el.innerHTML = `<div class="countdown-banner">${msg}</div>`;
+    const what = inGroupView ? 'until you join us' : 'until Europe';
+    el.innerHTML = `<div class="countdown-banner"><span class="cd-num">${n}</span><span class="cd-txt">day${n === 1 ? '' : 's'} ${what}</span></div>`;
   } else {
     el.innerHTML = '';
   }
@@ -168,12 +167,14 @@ function renderCountdownBanner() {
 
 function renderDayStrip() {
   const strip = document.getElementById('day-strip');
+  const todayIdx = todayDayIndex();
   strip.innerHTML = visibleIdx().map((i) => {
     const d = STATE.days[i];
     const active = i === STATE.currentDayIdx ? ' active' : '';
-    const loc = escapeHtml(d.locations[0] || '');
-    return `<button class="day-chip${active}" data-idx="${i}">
-      <span class="n">D${d.day}</span><span class="dt">${shortDate(d.date)}</span><span class="loc">${loc}</span>
+    const today = i === todayIdx ? ' is-today' : '';
+    const loc = escapeHtml(d.endLocation || d.locations[0] || '');
+    return `<button class="day-chip${active}${today}" data-idx="${i}" aria-label="Day ${d.day}, ${shortDate(d.date)}, ${loc}${today ? ', today' : ''}">
+      <span class="dt">${shortDate(d.date)}</span><span class="n">${d.day}</span><span class="loc">${loc}</span>
     </button>`;
   }).join('');
   strip.querySelectorAll('.day-chip').forEach((btn) => {
@@ -196,19 +197,26 @@ function dayDateLabel(d) {
   return d.date.toLocaleDateString('en-AU', { weekday: 'short', day: 'numeric', month: 'short' });
 }
 
+/** Group names in the sheet's day notes (shown with a people icon, text unchanged). */
+const PEOPLE_RE = /chants|alan|tiff|pete/i;
+
 function renderDayHeader(d) {
   const header = document.getElementById('day-header');
   const chips = [...d.labelChips, ...d.noteChips];
+  const people = chips.filter((c) => PEOPLE_RE.test(c));
+  const meta = chips.filter((c) => !PEOPLE_RE.test(c));
   header.innerHTML = `
     <div class="title-row">
-      <p class="title">Day ${d.day} · ${escapeHtml(dayDateLabel(d))}</p>
-      <button type="button" class="share-btn" id="share-day" aria-label="Share this day">↗ Share</button>
+      <p class="date-line">Day ${d.day} · ${escapeHtml(dayDateLabel(d))}</p>
+      <button type="button" class="share-btn" id="share-day">${icon('share')}<span>Share</span></button>
     </div>
-    <p class="locations">${d.locations.map(escapeHtml).join(' → ') || '—'}</p>
-    ${chips.length ? `<div class="chips">${chips.map((c) => `<span class="chip">${escapeHtml(c)}</span>`).join('')}</div>` : ''}
+    <h2 class="place-title">${d.locations.map(escapeHtml).join(' <span class="to">→</span> ') || '—'}</h2>
+    ${meta.length ? `<p class="meta-line">${meta.map(escapeHtml).join(', ')}</p>` : ''}
+    ${people.length ? `<p class="people-line">${icon('users')}<span>${people.map(escapeHtml).join(', ')}</span></p>` : ''}
     ${d.stay ? `<button type="button" class="stay-line" id="stay-btn">
-        <span>🛏️ Tonight: <strong>${escapeHtml(d.stay.name)}</strong></span>
-        <span class="stay-more">Address ›</span>
+        ${icon('bed', 'stay-ic')}
+        <span class="stay-text"><span class="stay-label">Tonight</span><strong>${escapeHtml(d.stay.name)}</strong></span>
+        <span class="stay-more">Address${icon('chevRight')}</span>
       </button>` : ''}
   `;
   const btn = document.getElementById('stay-btn');
@@ -237,7 +245,7 @@ function dayShareText(d) {
 /** Phone share menu if available; otherwise copy to clipboard. */
 async function shareDay(d, btn) {
   const text = dayShareText(d);
-  const label = btn.textContent;
+  const label = btn.innerHTML;
   try {
     if (navigator.share) {
       await navigator.share({ title: `Day ${d.day} plan`, text });
@@ -250,7 +258,7 @@ async function shareDay(d, btn) {
     try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied ✓'; }
     catch (_) { btn.textContent = 'Couldn\'t share'; }
   }
-  setTimeout(() => { btn.textContent = label; }, 1800);
+  setTimeout(() => { btn.innerHTML = label; }, 1800);
 }
 
 /** Tap "Tonight" → big, copyable address for taxis/Uber, plus Maps. Never guesses an address. */
@@ -260,12 +268,13 @@ function showStayPanel(stay) {
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stay.address)}`
     : stay.url;
   el.innerHTML = `<div class="picker-card" role="dialog" aria-label="Tonight's stay">
-    <p class="picker-title">🛏️ ${escapeHtml(stay.name)}</p>
+    <p class="picker-title">${escapeHtml(stay.name)}</p>
+    <p class="picker-sub">Tonight's stay</p>
     ${stay.address
       ? `<p class="stay-address" id="stay-address">${escapeHtml(stay.address)}</p>
          <button type="button" class="picker-btn" id="stay-copy"><span>Copy address</span><span class="picker-range">for Uber / taxi</span></button>`
       : `<p class="picker-sub">No address in the sheet yet.</p>`}
-    ${mapsUrl ? extLink(mapsUrl, 'picker-btn alt stay-maps', '<span>Open in Maps</span><span class="picker-range">📍</span>') : ''}
+    ${mapsUrl ? extLink(mapsUrl, 'picker-btn alt stay-maps', `<span>Open in Maps</span>${icon('pin')}`) : ''}
     <button type="button" class="picker-skip" id="stay-close">Close</button>
   </div>`;
   el.hidden = false;
@@ -286,35 +295,82 @@ function showStayPanel(stay) {
 let stayPanelOpen = false;
 function closeStayPanel() { stayPanelOpen = false; closeOverlay(); }
 
-function cardHtml(card) {
-  const stayClass = card.isStay ? ' stay' : '';
+const CATEGORY_ICON = {
+  Dining: 'food', Sightseeing: 'camera', Activity: 'star', Entertainment: 'music', Accomodation: 'bed', Transit: 'route',
+};
+
+function rowIcon(card) {
+  if (card.isCheckOut) return 'door';
+  if (card.isCheckIn) return 'bed';
+  return CATEGORY_ICON[card.category] || 'dot';
+}
+
+function mapBtn(card) {
+  return card.hasLink ? extLink(card.url, 'map-btn', `${icon('pin')}<span class="sr">Map for ${escapeHtml(card.title)}</span>`) : '';
+}
+
+/** Ordinary activity: a light row on the day's line. */
+function rowHtml(card) {
+  const cls = card.isCheckIn ? ' is-checkin' : card.isCheckOut ? ' is-checkout' : '';
   return `
-    <div class="card${stayClass}">
-      <div class="row1">
-        ${card.icon ? `<span class="icon">${card.icon}</span>` : ''}
-        <span class="title">${escapeHtml(card.title)}</span>
+    <li class="act${cls}">
+      <span class="act-ic">${icon(rowIcon(card))}</span>
+      <div class="act-body">
+        <p class="act-title">${escapeHtml(card.title)}</p>
+        ${card.notes ? `<p class="act-notes">${escapeHtml(card.notes)}</p>` : ''}
+        ${card.logistics ? `<p class="act-logi">${icon('clock')}<span>${escapeHtml(card.logistics)}</span></p>` : ''}
       </div>
-      ${card.notes ? `<div class="notes">${escapeHtml(card.notes)}</div>` : ''}
-      ${card.logistics ? `<div class="logistics">🧭 ${escapeHtml(card.logistics)}</div>` : ''}
-      ${card.hasLink ? extLink(card.url, 'map-btn', '📍 Map') : ''}
-    </div>
-  `;
+      ${mapBtn(card)}
+    </li>`;
+}
+
+/** Consecutive travel legs drawn as one connected route. */
+function routeHtml(legs) {
+  return `
+    <li class="route">
+      <ol class="legs">
+        ${legs.map((c) => `
+          <li class="leg">
+            <span class="leg-node">${icon(c.mode === 'route' ? 'route' : c.mode)}</span>
+            <div class="leg-body">
+              <p class="leg-title">${escapeHtml(c.title)}</p>
+              ${c.logistics ? `<p class="leg-time">${escapeHtml(c.logistics)}</p>` : ''}
+              ${c.notes ? `<p class="leg-notes">${escapeHtml(c.notes)}</p>` : ''}
+            </div>
+            ${mapBtn(c)}
+          </li>`).join('')}
+      </ol>
+    </li>`;
+}
+
+/** Rows for one slot: runs of travel legs become a route block, everything else a row. */
+function slotHtml(cards) {
+  const out = [];
+  let run = [];
+  const flush = () => { if (run.length) { out.push(routeHtml(run)); run = []; } };
+  for (const c of cards) {
+    if (c.mode) { run.push(c); continue; }
+    flush();
+    out.push(rowHtml(c));
+  }
+  flush();
+  return out.join('');
 }
 
 function renderTimeline(d) {
   const timeline = document.getElementById('timeline');
   if (d.empty) {
-    timeline.innerHTML = '<div class="empty-day">Nothing planned yet</div>';
+    timeline.innerHTML = '<p class="empty-day">Nothing planned yet. Add rows for this day in the sheet and they\'ll show here.</p>';
     return;
   }
   const order = ['Morning', 'Afternoon', 'Evening', 'Plans'];
   timeline.innerHTML = order
     .filter((slot) => d.slots[slot].length > 0)
     .map((slot) => `
-      <div class="slot-section">
-        <h2>${slot}</h2>
-        ${d.slots[slot].map(cardHtml).join('')}
-      </div>
+      <section class="slot-section">
+        <h3 class="slot-title">${slot === 'Plans' ? 'Any time' : slot}</h3>
+        <ul class="acts">${slotHtml(d.slots[slot])}</ul>
+      </section>
     `).join('');
 }
 
@@ -338,7 +394,7 @@ function showGroupPicker() {
   stayPanelOpen = false;
   const el = document.getElementById('group-picker');
   el.innerHTML = `<div class="picker-card" role="dialog" aria-label="Who are you?">
-    <p class="picker-title">Who are you? 👋</p>
+    <p class="picker-title">Who are you?</p>
     <p class="picker-sub">We'll show your days of the trip. You only need to pick once.</p>
     ${Object.entries(GROUPS).map(([id, g]) => {
       const range = dayRangeLabel(STATE.days.filter((d) => d.date && d.date >= g.from && d.date <= g.to));
@@ -383,10 +439,10 @@ function renderGroupBar() {
   title.hidden = Boolean(show);
   if (!show) return;
   if (!g) {
-    chip.innerHTML = `<span class="gc-name">👋 Who are you?</span><span class="gc-range">Pick your days ▾</span>`;
+    chip.innerHTML = `<span class="gc-name">${icon('users')}Who are you?</span><span class="gc-range">Pick your days${icon('chevDown')}</span>`;
     return;
   }
-  chip.innerHTML = `<span class="gc-name">👋 ${escapeHtml(g.label)}</span><span class="gc-range">${escapeHtml(shortRange(g.from, g.to))} ▾</span>`;
+  chip.innerHTML = `<span class="gc-name">${icon('users')}${escapeHtml(g.label)}</span><span class="gc-range">${escapeHtml(shortRange(g.from, g.to))}${icon('chevDown')}</span>`;
 }
 
 function renderToday() {
@@ -409,16 +465,16 @@ function renderToday() {
 
 /* ---------------- Rendering: Overview screen ---------------- */
 
+/** Trip strip: consecutive days grouped by where each day finishes. */
 function computeBlocks(days) {
   const blocks = [];
   let cur = null;
   for (const d of days) {
-    const key = d.locations.join(' + ') || '—';
+    const key = d.endLocation || d.locations[d.locations.length - 1] || '—';
     if (!cur || cur.key !== key) {
-      cur = { key, startDay: d.day, endDay: d.day, locations: d.locations, days: [d] };
+      cur = { key, startDay: d.day, days: [d] };
       blocks.push(cur);
     } else {
-      cur.endDay = d.day;
       cur.days.push(d);
     }
   }
@@ -428,15 +484,25 @@ function computeBlocks(days) {
 function renderOverview() {
   const list = document.getElementById('overview-list');
   renderGroupBar();
+  const todayIdx = todayDayIndex();
+  const todayDay = todayIdx === -1 ? null : STATE.days[todayIdx].day;
   const blocks = computeBlocks(visibleIdx().map((i) => STATE.days[i]));
-  list.innerHTML = blocks.map((b) => {
-    const range = dayRangeLabel(b.days);
-    return `<div class="overview-block" data-start="${b.startDay}">
-      <div class="range">${range}</div>
-      <p class="place">${escapeHtml(b.locations.join(' + ') || '—')}</p>
-    </div>`;
-  }).join('');
-  list.querySelectorAll('.overview-block').forEach((el) => {
+  list.innerHTML = `<ol class="trip-strip">${blocks.map((b) => {
+    const first = b.days[0], last = b.days[b.days.length - 1];
+    const n = b.days.length;
+    const isNow = todayDay != null && b.days.some((d) => d.day === todayDay);
+    return `<li class="stop${isNow ? ' is-now' : ''}">
+      <button type="button" class="stop-btn" data-start="${b.startDay}">
+        <span class="stop-dot"></span>
+        <span class="stop-body">
+          <span class="stop-place">${escapeHtml(b.key)}</span>
+          <span class="stop-when"><strong>${escapeHtml(shortRange(first.date, last.date))}</strong><span class="stop-days">Day ${first.day === last.day ? first.day : `${first.day}–${last.day}`}, ${n} day${n === 1 ? '' : 's'}</span></span>
+        </span>
+        ${isNow ? '<span class="now-tag">Today</span>' : icon('chevRight')}
+      </button>
+    </li>`;
+  }).join('')}</ol>`;
+  list.querySelectorAll('.stop-btn').forEach((el) => {
     el.addEventListener('click', () => {
       const day = parseInt(el.dataset.start, 10);
       showScreen('today');
@@ -468,14 +534,16 @@ function renderPlacesFilter() {
 function renderPlacesList() {
   const list = document.getElementById('places-list');
   const items = placesFilter === 'All' ? STATE.places : STATE.places.filter((p) => p.area === placesFilter);
-  list.innerHTML = items.map((p) => `
-    <div class="place-card">
-      <div class="name">${escapeHtml(p.name)}</div>
-      <div class="meta">${[p.area, p.category].filter(Boolean).map(escapeHtml).join(' · ')}</div>
-      ${p.notes ? `<div class="notes">${escapeHtml(p.notes)}</div>` : ''}
-      ${extLink(p.url, 'map-btn', '📍 Map')}
-    </div>
-  `).join('');
+  list.innerHTML = `<ul class="place-list">${items.map((p) => `
+    <li class="place-card">
+      <div class="place-body">
+        <p class="name">${escapeHtml(p.name)}</p>
+        <p class="meta">${[p.category, p.area].filter(Boolean).map(escapeHtml).join(' in ')}</p>
+        ${p.notes ? `<p class="notes">${escapeHtml(p.notes)}</p>` : ''}
+      </div>
+      ${extLink(p.url, 'map-btn', `${icon('pin')}<span class="sr">Map for ${escapeHtml(p.name)}</span>`)}
+    </li>
+  `).join('')}</ul>`;
 }
 
 /* ---------------- Rendering: Handy screen ---------------- */
@@ -541,7 +609,7 @@ function renderHandy() {
 
   const emergencyHtml = `
     <section class="handy-section">
-      <h2>🚨 Emergency</h2>
+      <h2>${icon('alert')}Emergency</h2>
       ${emergency.map((e) => `
         <div class="handy-item">
           <div class="handy-label">${escapeHtml(e.label)}</div>
@@ -554,7 +622,7 @@ function renderHandy() {
 
   const countryHtml = countries.map(([name, c]) => `
     <section class="handy-section">
-      <h2>🌍 ${escapeHtml(name)}${name === here ? ' <span class="here-badge">📍 You\'re here</span>' : ''}</h2>
+      <h2>${icon('globe')}${escapeHtml(name)}${name === here ? ' <span class="here-badge">You\'re here</span>' : ''}</h2>
       <div class="handy-item">
         <div class="handy-label">Currency</div>
         <div class="handy-value">${escapeHtml(c.currency.value)}</div>
@@ -581,7 +649,7 @@ function renderHandy() {
 
   const transportHtml = `
     <section class="handy-section">
-      <h2>🚆 Transport</h2>
+      <h2>${icon('train')}Transport</h2>
       ${HANDY.transport.map((t) => `
         <div class="handy-item">
           ${extLink(t.url, 'handy-value link', escapeHtml(t.name))}
@@ -593,7 +661,7 @@ function renderHandy() {
 
   const tomorrowlandHtml = `
     <section class="handy-section">
-      <h2>🎶 Tomorrowland</h2>
+      <h2>${icon('music')}Tomorrowland</h2>
       ${HANDY.tomorrowland.map((t) => `
         <div class="handy-item">
           ${extLink(t.url, 'handy-value link', escapeHtml(t.label))}
@@ -604,7 +672,7 @@ function renderHandy() {
 
   const weatherHtml = `
     <section class="handy-section">
-      <h2>☀️ Weather</h2>
+      <h2>${icon('sun')}Weather</h2>
       <div class="weather-grid">
         ${HANDY.weather.map((w) => extLink(w.url, 'weather-chip', escapeHtml(w.city))).join('')}
       </div>
@@ -623,7 +691,7 @@ function showScreen(name) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
   document.getElementById(`screen-${name}`).classList.add('active');
   document.querySelectorAll('.bottom-nav button').forEach((b) => b.classList.toggle('active', b.dataset.screen === name));
-  const titles = { today: 'Europe 2027', overview: 'Trip Overview', places: 'Places to Try', handy: 'Handy Info' };
+  const titles = { today: 'Europe 2027', overview: 'The route', places: 'Places to try', handy: 'Handy info' };
   document.getElementById('topbar-title').textContent = titles[name];
   renderGroupBar();
   // Day strip + day controls belong to the Today screen only.

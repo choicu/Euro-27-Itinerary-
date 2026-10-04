@@ -10,7 +10,7 @@
   <title>Europe 2027</title>
   <link id="app-manifest" rel="manifest" href="manifest.webmanifest">
   <script src="manifest-switch.js"></script>
-  <meta name="theme-color" content="#2a6e83">
+  <meta name="theme-color" content="#0f3d5e">
   <link rel="icon" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="stylesheet" href="styles.css">
@@ -21,9 +21,9 @@
       <h1 id="topbar-title">Europe 2027</h1>
       <button type="button" id="group-chip" class="group-chip" hidden></button>
       <div class="day-nav" id="day-nav">
-        <button id="day-prev" aria-label="Previous day">‹</button>
+        <button id="day-prev" aria-label="Previous day"><svg class="ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg></button>
         <button id="day-today" class="today-btn" hidden>Today</button>
-        <button id="day-next" aria-label="Next day">›</button>
+        <button id="day-next" aria-label="Next day"><svg class="ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6"/></svg></button>
       </div>
     </div>
     <div class="day-strip" id="day-strip"></div>
@@ -53,10 +53,10 @@
   <div id="group-picker" class="group-picker" hidden></div>
 
   <nav class="bottom-nav">
-    <button data-screen="today" class="active"><span class="ic">📅</span>Today</button>
-    <button data-screen="overview"><span class="ic">🗺️</span>Overview</button>
-    <button data-screen="places"><span class="ic">📍</span>Places</button>
-    <button data-screen="handy"><span class="ic">ℹ️</span>Handy</button>
+    <button data-screen="today" class="active"><svg class="ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span>Today</span></button>
+    <button data-screen="overview"><svg class="ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M9 19h8.5a3.5 3.5 0 0 0 0-7h-11a3.5 3.5 0 0 1 0-7H15"/></svg><span>Route</span></button>
+    <button data-screen="places"><svg class="ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg><span>Places</span></button>
+    <button data-screen="handy"><svg class="ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg><span>Handy</span></button>
   </nav>
 
   <script type="module" src="app.js"></script>
