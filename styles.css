@@ -652,3 +652,42 @@ button:active, a.map-btn:active, a.picker-btn:active, .weather-chip:active { opa
 }
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slide-up { from { transform: translateY(24px); opacity: 0.6; } to { transform: none; opacity: 1; } }
+
+/* ---------- Search ---------- */
+.search-bar { position: sticky; top: var(--topbar-h, 60px); z-index: 5; padding: 12px 16px; background: var(--bg); }
+#search-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 0 16px;
+  border: 1px solid var(--border);
+  border-radius: 14px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 17px; /* 16px+ stops iPhone zooming in on focus */
+}
+#search-input:focus { outline: 3px solid var(--today); outline-offset: 1px; }
+.search-results { padding: 0 16px 16px; }
+.search-empty, .search-count { padding: 8px 0; font-size: 14px; color: var(--text-soft); }
+.search-list > li + li { border-top: 1px solid var(--border); }
+.search-hit {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  padding: 12px 0;
+  border: none;
+  background: none;
+  text-align: left;
+  font: inherit;
+}
+.search-hit > .ic { color: var(--primary); margin-top: 2px; }
+.hit-body { display: flex; flex-direction: column; min-width: 0; }
+.hit-title { font-size: 16px; font-weight: 600; }
+.hit-sub { font-size: 13px; color: var(--text-soft); }
+.hit-snip { margin-top: 2px; font-size: 14px; color: var(--text-soft); }
+mark { background: var(--today); color: var(--on-today); border-radius: 3px; padding: 0 1px; }
+/* Row jumped to from search */
+.acts li.flash { animation: flash 1.6s ease-out; border-radius: 10px; }
+@keyframes flash { 0%, 40% { background: color-mix(in srgb, var(--today) 45%, transparent); } 100% { background: transparent; } }
+@media (prefers-reduced-motion: reduce) { .acts li.flash { animation: none; outline: 3px solid var(--today); } }

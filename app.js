@@ -634,6 +634,110 @@ function renderPlacesList() {
   });
 }
 
+/* ---------------- Search ---------------- */
+
+/** Lower-case and strip accents so "caffe" matches "Caffè". */
+function fold(s) {
+  return String(s ?? '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+}
+
+/** Escape text and wrap the first match of q in <mark> (accent-insensitive). */
+function markMatch(text, q) {
+  const raw = String(text ?? '');
+  const i = fold(raw).indexOf(q);
+  if (!q || i === -1) return escapeHtml(raw);
+  // fold() keeps length for these scripts (one base char per accented char after stripping marks)
+  return `${escapeHtml(raw.slice(0, i))}<mark>${escapeHtml(raw.slice(i, i + q.length))}</mark>${escapeHtml(raw.slice(i + q.length))}`;
+}
+
+/** Search index: activities on viewable days + Places to try. Rebuilt when data/view changes. */
+function searchItems() {
+  const items = [];
+  for (const i of visibleIdx()) {
+    const d = STATE.days[i];
+    for (const slot of ['Morning', 'Afternoon', 'Evening', 'Plans']) {
+      for (const c of d.slots[slot]) {
+        items.push({
+          kind: 'act', dayIdx: i, card: c,
+          title: c.title, sub: `Day ${d.day} · ${dayDateLabel(d)} · ${c.location || d.endLocation || ''}`,
+          hay: fold([c.title, c.notes, c.logistics, c.location, c.hours, c.linkLabel].join(' ')),
+        });
+      }
+    }
+  }
+  STATE.places.forEach((p, pi) => {
+    items.push({
+      kind: 'place', placeIdx: pi,
+      title: p.name, sub: ['Place to try', p.category, p.area].filter(Boolean).join(' · '),
+      hay: fold([p.name, p.area, p.category, p.notes, p.hours].join(' ')),
+    });
+  });
+  return items;
+}
+
+function renderSearch() {
+  const input = document.getElementById('search-input');
+  const out = document.getElementById('search-results');
+  const q = fold(input.value.trim());
+  if (q.length < 2) {
+    out.innerHTML = '<p class="search-empty">Type at least 2 letters, e.g. ferry, gelato, Colosseum.</p>';
+    return;
+  }
+  const hits = searchItems().filter((it) => it.hay.includes(q)).slice(0, 60);
+  if (!hits.length) {
+    out.innerHTML = `<p class="search-empty">No matches for "${escapeHtml(input.value.trim())}".</p>`;
+    return;
+  }
+  SEARCH_HITS = hits;
+  out.innerHTML = `<p class="search-count">${hits.length} result${hits.length === 1 ? '' : 's'}</p>
+    <ul class="search-list">${hits.map((h, i) => `
+      <li><button type="button" class="search-hit" data-hit="${i}">
+        ${icon(h.kind === 'place' ? 'pin' : h.card.mode ? (h.card.mode === 'route' ? 'route' : h.card.mode) : rowIcon(h.card))}
+        <span class="hit-body">
+          <span class="hit-title">${markMatch(h.title, q)}</span>
+          <span class="hit-sub">${escapeHtml(h.sub)}</span>
+          ${matchedOutsideTitle(h, q)}
+        </span>
+      </button></li>`).join('')}</ul>`;
+}
+
+/** If the match is in notes/travel/hours (not the title), show that snippet so it's clear why it matched. */
+function matchedOutsideTitle(h, q) {
+  if (fold(h.title).includes(q)) return '';
+  const src = h.kind === 'place' ? STATE.places[h.placeIdx] : h.card;
+  for (const f of [src.notes, src.logistics, src.hours]) {
+    if (f && fold(f).includes(q)) return `<span class="hit-snip">${markMatch(f, q)}</span>`;
+  }
+  return '';
+}
+
+let SEARCH_HITS = [];
+document.getElementById('search-input').addEventListener('input', renderSearch);
+document.getElementById('search-input').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') e.currentTarget.blur(); // hide keyboard to show results
+});
+document.getElementById('search-results').addEventListener('click', (e) => {
+  const btn = e.target.closest('.search-hit');
+  if (!btn) return;
+  const h = SEARCH_HITS[parseInt(btn.dataset.hit, 10)];
+  if (h.kind === 'place') {
+    const p = STATE.places[h.placeIdx];
+    showDetailPanel({ title: p.name, sub: [p.category, p.area].filter(Boolean).join(' in '), hours: p.hours, notes: p.notes, url: p.url });
+    return;
+  }
+  // Jump to the day, then bring the matching row into view and flash it.
+  showScreen('today');
+  goToDay(h.dayIdx);
+  const ri = CARD_REFS.indexOf(h.card);
+  const row = ri === -1 ? null : document.querySelector(`[data-card="${ri}"]`);
+  if (row) {
+    const li = row.closest('li');
+    li.scrollIntoView({ block: 'center' });
+    li.classList.add('flash');
+    setTimeout(() => li.classList.remove('flash'), 1600);
+  }
+});
+
 /* ---------------- Rendering: Handy screen ---------------- */
 
 let HANDY = null;
@@ -783,11 +887,13 @@ function showScreen(name) {
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
   document.getElementById(`screen-${name}`).classList.add('active');
   document.querySelectorAll('.bottom-nav button').forEach((b) => b.classList.toggle('active', b.dataset.screen === name));
-  const titles = { today: 'Europe 2027', overview: 'The route', places: 'Places to try', handy: 'Handy info' };
+  const titles = { today: 'Europe 2027', overview: 'The route', places: 'Places to try', search: 'Search', handy: 'Handy info' };
   document.getElementById('topbar-title').textContent = titles[name];
   renderGroupBar();
   // Day strip + day controls belong to the Today screen only.
   document.body.classList.toggle('on-today', name === 'today');
+  // Let pinned elements (search box) sit exactly under the top bar, whatever its height.
+  document.documentElement.style.setProperty('--topbar-h', `${document.querySelector('.topbar').offsetHeight}px`);
   window.scrollTo(0, 0);
 }
 
@@ -796,12 +902,14 @@ function renderCurrentScreen() {
   if (currentScreen === 'overview') renderOverview();
   if (currentScreen === 'places') { renderPlacesFilter(); renderPlacesList(); }
   if (currentScreen === 'handy') renderHandy();
+  if (currentScreen === 'search') renderSearch();
 }
 
 document.querySelectorAll('.bottom-nav button').forEach((btn) => {
   btn.addEventListener('click', () => {
     showScreen(btn.dataset.screen);
     renderCurrentScreen();
+    if (btn.dataset.screen === 'search') document.getElementById('search-input').focus();
   });
 });
 

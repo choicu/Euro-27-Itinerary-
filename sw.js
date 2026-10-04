@@ -1,5 +1,5 @@
 // Bump CACHE_VERSION on every app-shell change so phones pick up the update.
-const CACHE_VERSION = 'v16';
+const CACHE_VERSION = 'v17';
 const SHELL_CACHE = `europe2027-shell-${CACHE_VERSION}`;
 
 const SHELL_FILES = [
