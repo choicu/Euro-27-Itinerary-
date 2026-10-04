@@ -621,6 +621,12 @@ body:not(.on-today) .day-strip { display: none; }
 
 /* ---------- Tonight's stay + Handy "you're here" ---------- */
 .stay-line {
+  width: 100%;
+  min-height: 48px;
+  text-align: left;
+  color: var(--text);
+  font-family: inherit;
+  cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -655,3 +661,14 @@ body:not(.on-today) .day-strip { display: none; }
   margin-left: 6px;
   vertical-align: middle;
 }
+
+.stay-line .stay-more { flex: 0 0 auto; color: var(--primary); font-weight: 700; font-size: 13px; padding-right: 8px; }
+.stay-address {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.35;
+  margin: 4px 0 16px;
+  user-select: text;
+  -webkit-user-select: text;
+}
+a.picker-btn { text-decoration: none; }

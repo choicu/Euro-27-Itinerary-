@@ -110,6 +110,7 @@ export function parseItinerary(csvText) {
     notes: findHeaderIndex(header, (h) => h === 'Notes'),
     logistics: findHeaderIndex(header, (h) => h === 'Logistics'),
     url: findHeaderIndex(header, (h) => h === 'URL'), // optional, per checkpoint (a)
+    address: findHeaderIndex(header, (h) => h === 'Address'), // optional: street address on check-in rows
   };
   for (const k of ['dayLabel', 'date', 'location', 'slot', 'title', 'category', 'link', 'notes', 'logistics']) {
     if (col[k] === -1) {
@@ -189,7 +190,8 @@ export function parseItinerary(csvText) {
     const card = {
       title, category, icon: iconFor(category),
       notes, logistics, linkLabel: link || null, url,
-      hasLink: Boolean(urlCol || link), // Map button only shown when the sheet's Link/URL is filled
+      hasLink: Boolean(urlCol || link),
+      address: col.address >= 0 ? get(col.address) : '', // Map button only shown when the sheet's Link/URL is filled
       isStay: isStayCard(category, title),
       isCheckIn: /^check[ -]?in/i.test(title) || /^take taxi and check in/i.test(title) || (category === 'Accomodation' && !/^check[ -]?out/i.test(title)),
       isCheckOut: /^check[ -]?out/i.test(title),
@@ -263,7 +265,7 @@ export function parseItinerary(csvText) {
       // Prefer the Link label (hotel name); otherwise drop the leading "Check into" so
       // "Check into Mykonos Hotel" reads as "Mykonos Hotel". Nothing else is reworded.
       const fromTitle = c.title.replace(/^(take taxi and )?check[ -]?in(to)?\s*(to\s+)?(-\s*)?/i, '').trim();
-      carry = { name: c.linkLabel || fromTitle || c.title, url: c.hasLink ? c.url : null };
+      carry = { name: c.linkLabel || fromTitle || c.title, url: c.hasLink ? c.url : null, address: c.address || '' };
     } else if (hasCheckOut) {
       carry = null;
     }

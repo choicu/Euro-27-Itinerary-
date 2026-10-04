@@ -203,9 +203,47 @@ function renderDayHeader(d) {
     <p class="title">Day ${d.day} · ${escapeHtml(dayDateLabel(d))}</p>
     <p class="locations">${d.locations.map(escapeHtml).join(' → ') || '—'}</p>
     ${chips.length ? `<div class="chips">${chips.map((c) => `<span class="chip">${escapeHtml(c)}</span>`).join('')}</div>` : ''}
-    ${d.stay ? `<div class="stay-line"><span>🛏️ Tonight: <strong>${escapeHtml(d.stay.name)}</strong></span>${d.stay.url ? extLink(d.stay.url, 'stay-map', '📍 Map') : ''}</div>` : ''}
+    ${d.stay ? `<button type="button" class="stay-line" id="stay-btn">
+        <span>🛏️ Tonight: <strong>${escapeHtml(d.stay.name)}</strong></span>
+        <span class="stay-more">Address ›</span>
+      </button>` : ''}
   `;
+  const btn = document.getElementById('stay-btn');
+  if (btn) btn.addEventListener('click', () => showStayPanel(d.stay));
 }
+
+/** Tap "Tonight" → big, copyable address for taxis/Uber, plus Maps. Never guesses an address. */
+function showStayPanel(stay) {
+  const el = document.getElementById('group-picker');
+  const mapsUrl = stay.address
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stay.address)}`
+    : stay.url;
+  el.innerHTML = `<div class="picker-card" role="dialog" aria-label="Tonight's stay">
+    <p class="picker-title">🛏️ ${escapeHtml(stay.name)}</p>
+    ${stay.address
+      ? `<p class="stay-address" id="stay-address">${escapeHtml(stay.address)}</p>
+         <button type="button" class="picker-btn" id="stay-copy"><span>Copy address</span><span class="picker-range">for Uber / taxi</span></button>`
+      : `<p class="picker-sub">No address in the sheet yet.</p>`}
+    ${mapsUrl ? extLink(mapsUrl, 'picker-btn alt stay-maps', '<span>Open in Maps</span><span class="picker-range">📍</span>') : ''}
+    <button type="button" class="picker-skip" id="stay-close">Close</button>
+  </div>`;
+  el.hidden = false;
+  stayPanelOpen = true;
+  document.getElementById('stay-close').addEventListener('click', closeStayPanel);
+  const copy = document.getElementById('stay-copy');
+  if (copy) copy.addEventListener('click', async () => {
+    let ok = false;
+    try { await navigator.clipboard.writeText(stay.address); ok = true; } catch (_) { /* fall back below */ }
+    if (!ok) {
+      // Fallback: select the text so a long-press "Copy" works.
+      const r = document.createRange(); r.selectNodeContents(document.getElementById('stay-address'));
+      const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    }
+    copy.querySelector('span').textContent = ok ? 'Copied ✓' : 'Selected — tap Copy';
+  });
+}
+let stayPanelOpen = false;
+function closeStayPanel() { stayPanelOpen = false; closeOverlay(); }
 
 function cardHtml(card) {
   const stayClass = card.isStay ? ' stay' : '';
@@ -256,6 +294,7 @@ function renderSyncFooter() {
 
 /** "Who are you?" picker. Must be answered the first time; after that it can be closed. */
 function showGroupPicker() {
+  stayPanelOpen = false;
   const el = document.getElementById('group-picker');
   el.innerHTML = `<div class="picker-card" role="dialog" aria-label="Who are you?">
     <p class="picker-title">Who are you? 👋</p>
@@ -273,7 +312,7 @@ function showGroupPicker() {
 
 document.getElementById('group-picker').addEventListener('click', (e) => {
   // Tap outside the card closes it once a couple is chosen; the first pick needs an answer.
-  if (e.target.id === 'group-picker' && currentGroup()) closeOverlay();
+  if (e.target.id === 'group-picker' && (currentGroup() || stayPanelOpen)) closeStayPanel();
 });
 document.getElementById('group-chip').addEventListener('click', showGroupPicker);
 
