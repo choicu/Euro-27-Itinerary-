@@ -166,9 +166,23 @@ function renderCountdownBanner() {
   }
 }
 
+document.getElementById('day-strip').addEventListener('click', (e) => {
+  const btn = e.target.closest('.day-chip');
+  if (btn) goToDay(parseInt(btn.dataset.idx, 10));
+});
+
 function renderDayStrip() {
   const strip = document.getElementById('day-strip');
   const todayIdx = todayDayIndex();
+  const key = `${visibleIdx().join(',')}|${todayIdx}`;
+  if (key === stripKey) {
+    // Same days on the strip: just move the highlight (cheap, keeps scrolling smooth).
+    strip.querySelector('.day-chip.active')?.classList.remove('active');
+    strip.querySelector(`.day-chip[data-idx="${STATE.currentDayIdx}"]`)?.classList.add('active');
+    finishDayStrip(strip);
+    return;
+  }
+  stripKey = key;
   strip.innerHTML = visibleIdx().map((i) => {
     const d = STATE.days[i];
     const active = i === STATE.currentDayIdx ? ' active' : '';
@@ -178,9 +192,12 @@ function renderDayStrip() {
       <span class="dt">${shortDate(d.date)}</span><span class="n">${d.date ? WEEKDAY[d.date.getDay()] : d.day}</span><span class="loc">${loc}</span>
     </button>`;
   }).join('');
-  strip.querySelectorAll('.day-chip').forEach((btn) => {
-    btn.addEventListener('click', () => goToDay(parseInt(btn.dataset.idx, 10)));
-  });
+  finishDayStrip(strip);
+}
+
+let stripKey = null;
+/** Centre the active day and update the arrows / Today button. */
+function finishDayStrip(strip) {
   // Centre the active chip horizontally only (never scrolls the page vertically).
   const activeChip = strip.querySelector('.day-chip.active');
   if (activeChip) {
@@ -663,8 +680,12 @@ function rankEmergency(e, country) {
   return 2;
 }
 
+let handyKey = null;
 function renderHandy() {
   const el = document.getElementById('handy-list');
+  const key = `${HANDY ? 'ok' : 'none'}|${currentCountry() || ''}`;
+  if (key === handyKey) return; // already rendered for this country
+  handyKey = key;
   if (!HANDY) {
     el.innerHTML = '<p class="muted-note">Handy Info couldn\'t be loaded.</p>';
     return;
@@ -809,7 +830,10 @@ todayScreen.addEventListener('touchend', (e) => {
 let refreshing = false;
 let lastRefreshAttempt = 0;
 
+let lastCsvText = null;
+
 function applyData({ csvText, source, fetchedAt }) {
+  lastCsvText = csvText;
   const { days, places, meta } = parseItinerary(csvText);
   const keepDay = STATE.days.length ? STATE.days[STATE.currentDayIdx]?.day : null;
   STATE = { days, places, meta, source, fetchedAt, currentDayIdx: 0 };
@@ -824,8 +848,17 @@ async function refreshFromSheet() {
   lastRefreshAttempt = Date.now();
   renderSyncFooter();
   try {
-    applyData(await fetchLiveCSV());
-    renderCurrentScreen();
+    const live = await fetchLiveCSV();
+    if (live.csvText === lastCsvText) {
+      // Nothing changed in the sheet: just update the "Updated…" time, no re-render (no flicker/jank).
+      STATE.source = live.source;
+      STATE.fetchedAt = live.fetchedAt;
+    } else {
+      applyData(live);
+      stripKey = null; // day list may have changed
+      handyKey = null;
+      renderCurrentScreen();
+    }
   } catch (_) {
     /* no/weak signal: keep showing the saved copy */
   } finally {
@@ -847,10 +880,12 @@ document.addEventListener('visibilitychange', () => {
 
 async function boot() {
   document.body.classList.add('on-today');
+  document.body.classList.remove('ready');
   // 1. Show the saved copy instantly (works with no signal).
   applyData(await loadLocalCSV());
   renderToday();
   renderSyncFooter();
+  document.body.classList.add('ready');
   if (isFriendsMode() && !currentGroup()) showGroupPicker();
 
   // 2. Then check the sheet in the background (8s timeout).
@@ -863,10 +898,18 @@ async function boot() {
 
   if ('serviceWorker' in navigator) {
     // After a site update, reload once so the new version is used straight away.
+    // After a site update: reload straight away only if the app was just opened; otherwise wait
+    // until it's next brought back to the screen, so it never reloads while someone is reading.
     const hadController = Boolean(navigator.serviceWorker.controller);
+    const openedAt = Date.now();
     let reloaded = false;
+    const reload = () => { if (!reloaded) { reloaded = true; window.location.reload(); } };
     navigator.serviceWorker.addEventListener('controllerchange', () => {
-      if (hadController && !reloaded) { reloaded = true; window.location.reload(); }
+      if (!hadController) return;
+      if (Date.now() - openedAt < 4000) { reload(); return; }
+      document.addEventListener('visibilitychange', () => {
+        if (document.visibilityState === 'visible') reload();
+      }, { once: true });
     });
     navigator.serviceWorker.register('sw.js').catch(() => {});
   }

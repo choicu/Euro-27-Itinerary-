@@ -629,3 +629,26 @@ body:not(.on-today) .day-strip { display: none; }
 .detail-note { margin-top: 2px; font-size: 12px; color: var(--text-soft); }
 .detail-card .picker-btn:first-of-type { margin-top: 12px; }
 .detail-card { max-height: 88vh; overflow-y: auto; }
+
+/* ---------- Smoothness & responsiveness ---------- */
+/* Footer stays hidden until the first day has rendered, so nothing jumps on load. */
+body:not(.ready) .sync-footer { visibility: hidden; }
+/* Reserve the day strip's height so the header doesn't grow when days appear. */
+.day-strip { min-height: 82px; }
+/* Taps: no double-tap-zoom delay, no grey flash, clear pressed state. */
+button, a, .day-chip { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+button:active, a.map-btn:active, a.picker-btn:active, .weather-chip:active { opacity: 0.6; }
+.day-chip:active { transform: scale(0.96); }
+/* Horizontal lists scroll without dragging the whole page. */
+.day-strip, .places-filter { overscroll-behavior-x: contain; }
+.detail-card, .picker-card { overscroll-behavior: contain; }
+/* Long Handy sections skip rendering until scrolled near. */
+.handy-section { content-visibility: auto; contain-intrinsic-size: auto 480px; }
+/* Slide-up for panels (a response to a tap; skipped if reduced motion is on). */
+@media (prefers-reduced-motion: no-preference) {
+  .group-picker:not([hidden]) { animation: fade-in 160ms ease-out; }
+  .group-picker:not([hidden]) .picker-card { animation: slide-up 200ms cubic-bezier(.2,.8,.2,1); }
+  .day-chip { transition: transform 80ms ease-out; }
+}
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes slide-up { from { transform: translateY(24px); opacity: 0.6; } to { transform: none; opacity: 1; } }
