@@ -500,6 +500,7 @@ function chooseGroup(id) {
   STATE.currentDayIdx = pickInitialDayIndex(STATE.days);
   renderCurrentScreen();
   window.scrollTo(0, 0);
+  setTimeout(maybeShowInstallTip, 1200);
 }
 
 /** Close the picker overlay. */
@@ -631,6 +632,67 @@ function renderPlacesList() {
         hours: p.hours, notes: p.notes, url: p.url,
       });
     });
+  });
+}
+
+/* ---------------- "Add to Home Screen" tip (friends link) ---------------- */
+
+const INSTALL_KEY = 'europe2027_install_tip_v1';
+let deferredInstall = null; // Android/Chrome install prompt, if offered
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); // we show our own tip instead of the browser's mini-bar
+  deferredInstall = e;
+});
+window.addEventListener('appinstalled', () => { rememberInstallTip('installed'); hideInstallTip(); });
+
+function isInstalled() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function rememberInstallTip(v) { try { localStorage.setItem(INSTALL_KEY, v); } catch (_) { /* ignore */ } }
+function installTipSeen() { try { return Boolean(localStorage.getItem(INSTALL_KEY)); } catch (_) { return true; } }
+function isIOS() {
+  const ua = navigator.userAgent;
+  return /iPhone|iPad|iPod/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1);
+}
+function hideInstallTip() { document.getElementById('install-tip').hidden = true; }
+
+/** One-time tip: friends link only, after they've picked their days, never if installed or dismissed. */
+function maybeShowInstallTip() {
+  if (!FRIENDS_LINK || !currentGroup() || isInstalled() || installTipSeen()) return;
+  if (!document.getElementById('group-picker').hidden) return; // don't stack on another panel
+  const el = document.getElementById('install-tip');
+  const steps = isIOS()
+    ? `<ol class="tip-steps">
+         <li>Tap the <strong>Share</strong> button ${icon('share')} in your browser's toolbar</li>
+         <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
+         <li>Tap <strong>Add</strong></li>
+       </ol>`
+    : deferredInstall
+      ? ''
+      : `<ol class="tip-steps">
+           <li>Tap the browser menu <strong>⋮</strong> (top right)</li>
+           <li>Tap <strong>Install app</strong> or <strong>Add to Home screen</strong></li>
+         </ol>`;
+  el.innerHTML = `
+    <p class="tip-title">Keep this guide on your phone</p>
+    <p class="tip-sub">Add it to your home screen to open it like an app and use it offline.</p>
+    ${steps}
+    <div class="tip-actions">
+      ${deferredInstall ? '<button type="button" class="tip-primary" id="tip-install">Install</button>' : ''}
+      <button type="button" class="tip-later" id="tip-dismiss">${deferredInstall ? 'Not now' : 'Got it'}</button>
+    </div>`;
+  el.hidden = false;
+  document.getElementById('tip-dismiss').addEventListener('click', () => { rememberInstallTip('dismissed'); hideInstallTip(); });
+  const inst = document.getElementById('tip-install');
+  if (inst) inst.addEventListener('click', async () => {
+    const ev = deferredInstall; deferredInstall = null;
+    hideInstallTip();
+    try {
+      ev.prompt();
+      const choice = await ev.userChoice;
+      rememberInstallTip(choice && choice.outcome === 'accepted' ? 'installed' : 'dismissed');
+    } catch (_) { rememberInstallTip('dismissed'); }
   });
 }
 
@@ -995,6 +1057,7 @@ async function boot() {
   renderSyncFooter();
   document.body.classList.add('ready');
   if (isFriendsMode() && !currentGroup()) showGroupPicker();
+  else setTimeout(maybeShowInstallTip, 1500);
 
   // 2. Then check the sheet in the background (8s timeout).
   refreshFromSheet();

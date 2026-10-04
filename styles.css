@@ -691,3 +691,34 @@ mark { background: var(--today); color: var(--on-today); border-radius: 3px; pad
 .acts li.flash { animation: flash 1.6s ease-out; border-radius: 10px; }
 @keyframes flash { 0%, 40% { background: color-mix(in srgb, var(--today) 45%, transparent); } 100% { background: transparent; } }
 @media (prefers-reduced-motion: reduce) { .acts li.flash { animation: none; outline: 3px solid var(--today); } }
+
+/* ---------- Add to Home Screen tip ---------- */
+.install-tip {
+  position: fixed;
+  left: 50%;
+  transform: translateX(-50%);
+  bottom: calc(72px + env(safe-area-inset-bottom));
+  z-index: 40;
+  width: calc(100% - 24px);
+  max-width: 456px;
+  padding: 14px 16px 12px;
+  border: 1px solid var(--border);
+  border-left: 4px solid var(--today);
+  border-radius: 6px 16px 16px 6px;
+  background: var(--surface);
+  box-shadow: 0 8px 28px rgba(10, 25, 35, 0.22);
+}
+.install-tip[hidden] { display: none; }
+.tip-title { font-family: var(--font-display); font-size: 20px; font-weight: 700; color: var(--primary); }
+.tip-sub { margin-top: 2px; font-size: 14px; color: var(--text-soft); }
+.tip-steps { margin: 8px 0 0 20px; padding: 0; list-style: decimal; font-size: 15px; }
+.tip-steps li { padding: 2px 0; }
+.tip-steps .ic { width: 16px; height: 16px; vertical-align: -3px; color: var(--primary); }
+.tip-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
+.tip-primary, .tip-later { min-height: 44px; padding: 0 18px; border-radius: 12px; font-size: 15px; font-weight: 700; }
+.tip-primary { border: none; background: var(--primary); color: var(--on-fill); }
+.tip-later { border: 1px solid var(--border); background: var(--surface); color: var(--primary); }
+@media (prefers-reduced-motion: no-preference) {
+  .install-tip:not([hidden]) { animation: tip-up 220ms cubic-bezier(.2,.8,.2,1); }
+}
+@keyframes tip-up { from { transform: translate(-50%, 24px); opacity: 0; } to { transform: translate(-50%, 0); opacity: 1; } }
