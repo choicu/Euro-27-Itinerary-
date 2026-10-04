@@ -125,7 +125,8 @@ export function parseItinerary(csvText) {
     notes: findHeaderIndex(header, (h) => h === 'Notes'),
     logistics: findHeaderIndex(header, (h) => h === 'Logistics'),
     url: findHeaderIndex(header, (h) => h === 'URL'), // optional, per checkpoint (a)
-    address: findHeaderIndex(header, (h) => h === 'Address'), // optional: street address on check-in rows
+    address: findHeaderIndex(header, (h) => h === 'Address'), // optional: street address
+    hours: findHeaderIndex(header, (h) => h === 'Hours'),     // optional: opening hours
   };
   for (const k of ['dayLabel', 'date', 'location', 'slot', 'title', 'category', 'link', 'notes', 'logistics']) {
     if (col[k] === -1) {
@@ -207,7 +208,9 @@ export function parseItinerary(csvText) {
       title, category, icon: iconFor(category),
       notes, logistics, linkLabel: link || null, url,
       hasLink: Boolean(urlCol || link),
-      address: col.address >= 0 ? get(col.address) : '', // Map button only shown when the sheet's Link/URL is filled
+      address: col.address >= 0 ? get(col.address) : '',
+      hours: col.hours >= 0 ? get(col.hours) : '',
+      location: locVal, // Map button only shown when the sheet's Link/URL is filled
       isStay: isStayCard(category, title),
       isCheckIn: /^check[ -]?in/i.test(title) || /^take taxi and check in/i.test(title) || (category === 'Accomodation' && !/^check[ -]?out/i.test(title)),
       isCheckOut: /^check[ -]?out/i.test(title),
@@ -233,6 +236,7 @@ export function parseItinerary(csvText) {
       booking: findHeaderIndex(placesHeaderRow, (h) => h === 'Booking Status'),
       address: findHeaderIndex(placesHeaderRow, (h) => h.startsWith('Address')),
       notes: findHeaderIndex(placesHeaderRow, (h) => h === 'Notes'),
+      hours: findHeaderIndex(placesHeaderRow, (h) => h === 'Hours'),
       // Budget Estimate deliberately not read — never rendered (hard rule).
     };
     const placeRows = rows.slice(markerIdx + 2);
@@ -258,6 +262,7 @@ export function parseItinerary(csvText) {
         bookingStatus: get(pcol.booking) || null,
         addressLabel: addr || null,
         notes: get(pcol.notes) || null,
+        hours: get(pcol.hours) || null,
         url,
       });
     }

@@ -310,17 +310,26 @@ function mapBtn(card) {
   return card.hasLink ? extLink(card.url, 'map-btn', `${icon('pin')}<span class="sr">Map for ${escapeHtml(card.title)}</span>`) : '';
 }
 
-/** Ordinary activity: a light row on the day's line. */
+/* Cards on screen, so a tapped row can open its detail panel. */
+let CARD_REFS = [];
+function ref(card) { CARD_REFS.push(card); return CARD_REFS.length - 1; }
+
+/** Small "Hours" hint on rows that have opening hours. */
+function hoursHint(card) {
+  return card.hours ? `<span class="hours-hint">${icon('clock')}Hours</span>` : '';
+}
+
+/** Ordinary activity: a light row on the day's line. Tap the text for details. */
 function rowHtml(card) {
   const cls = card.isCheckIn ? ' is-checkin' : card.isCheckOut ? ' is-checkout' : '';
   return `
     <li class="act${cls}">
       <span class="act-ic">${icon(rowIcon(card))}</span>
-      <div class="act-body">
-        <p class="act-title">${escapeHtml(card.title)}</p>
+      <button type="button" class="act-body" data-card="${ref(card)}">
+        <p class="act-title">${escapeHtml(card.title)}${hoursHint(card)}</p>
         ${card.notes ? `<p class="act-notes">${escapeHtml(card.notes)}</p>` : ''}
-        ${card.logistics ? `<p class="act-logi">${icon('clock')}<span>${escapeHtml(card.logistics)}</span></p>` : ''}
-      </div>
+        ${card.logistics ? `<p class="act-logi">${icon('route')}<span>${escapeHtml(card.logistics)}</span></p>` : ''}
+      </button>
       ${mapBtn(card)}
     </li>`;
 }
@@ -333,11 +342,11 @@ function routeHtml(legs) {
         ${legs.map((c) => `
           <li class="leg">
             <span class="leg-node">${icon(c.mode === 'route' ? 'route' : c.mode)}</span>
-            <div class="leg-body">
-              <p class="leg-title">${escapeHtml(c.title)}</p>
+            <button type="button" class="leg-body" data-card="${ref(c)}">
+              <p class="leg-title">${escapeHtml(c.title)}${hoursHint(c)}</p>
               ${c.logistics ? `<p class="leg-time">${escapeHtml(c.logistics)}</p>` : ''}
               ${c.notes ? `<p class="leg-notes">${escapeHtml(c.notes)}</p>` : ''}
-            </div>
+            </button>
             ${mapBtn(c)}
           </li>`).join('')}
       </ol>
@@ -365,6 +374,7 @@ function renderTimeline(d) {
     return;
   }
   const order = ['Morning', 'Afternoon', 'Evening', 'Plans'];
+  CARD_REFS = [];
   timeline.innerHTML = order
     .filter((slot) => d.slots[slot].length > 0)
     .map((slot) => `
@@ -373,6 +383,57 @@ function renderTimeline(d) {
         <ul class="acts">${slotHtml(d.slots[slot])}</ul>
       </section>
     `).join('');
+  timeline.querySelectorAll('[data-card]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const c = CARD_REFS[parseInt(el.dataset.card, 10)];
+      showDetailPanel({
+        title: c.title, hours: c.hours, notes: c.notes, logistics: c.logistics,
+        address: c.address, url: c.hasLink ? c.url : null,
+      });
+    });
+  });
+}
+
+/**
+ * Tap a place → slide-up panel: opening hours (from the sheet), notes, travel info,
+ * address (copyable) and Maps. Shows only what the sheet has; never guesses.
+ */
+function showDetailPanel(item) {
+  const el = document.getElementById('group-picker');
+  const mapsUrl = item.address
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}`
+    : item.url;
+  el.innerHTML = `<div class="picker-card detail-card" role="dialog" aria-label="${escapeHtml(item.title)}">
+    <p class="picker-title">${escapeHtml(item.title)}</p>
+    ${item.sub ? `<p class="picker-sub">${escapeHtml(item.sub)}</p>` : '<div class="detail-gap"></div>'}
+    ${item.hours ? `<div class="detail-row">
+      ${icon('clock')}
+      <div>
+        <p class="detail-label">Opening hours</p>
+        <p class="detail-value">${escapeHtml(item.hours)}</p>
+        <p class="detail-note">From Google Maps / official sites, Oct 2026. Check before you go.</p>
+      </div>
+    </div>` : ''}
+    ${item.notes ? `<div class="detail-row">${icon('info')}<div><p class="detail-label">Notes</p><p class="detail-value">${escapeHtml(item.notes)}</p></div></div>` : ''}
+    ${item.logistics ? `<div class="detail-row">${icon('route')}<div><p class="detail-label">Getting there</p><p class="detail-value">${escapeHtml(item.logistics)}</p></div></div>` : ''}
+    ${item.address ? `<div class="detail-row">${icon('pin')}<div><p class="detail-label">Address</p><p class="detail-value" id="detail-address">${escapeHtml(item.address)}</p></div></div>
+      <button type="button" class="picker-btn" id="detail-copy"><span>Copy address</span><span class="picker-range">for Uber / taxi</span></button>` : ''}
+    ${mapsUrl ? extLink(mapsUrl, 'picker-btn alt', `<span>Open in Maps</span>${icon('pin')}`) : ''}
+    <button type="button" class="picker-skip" id="detail-close">Close</button>
+  </div>`;
+  el.hidden = false;
+  stayPanelOpen = true;
+  document.getElementById('detail-close').addEventListener('click', closeStayPanel);
+  const copy = document.getElementById('detail-copy');
+  if (copy) copy.addEventListener('click', async () => {
+    let ok = false;
+    try { await navigator.clipboard.writeText(item.address); ok = true; } catch (_) { /* fall back */ }
+    if (!ok) {
+      const r = document.createRange(); r.selectNodeContents(document.getElementById('detail-address'));
+      const s = window.getSelection(); s.removeAllRanges(); s.addRange(r);
+    }
+    copy.querySelector('span').textContent = ok ? 'Copied ✓' : 'Selected — tap Copy';
+  });
 }
 
 function renderSyncFooter() {
@@ -537,14 +598,23 @@ function renderPlacesList() {
   const items = placesFilter === 'All' ? STATE.places : STATE.places.filter((p) => p.area === placesFilter);
   list.innerHTML = `<ul class="place-list">${items.map((p) => `
     <li class="place-card">
-      <div class="place-body">
-        <p class="name">${escapeHtml(p.name)}</p>
+      <button type="button" class="place-body" data-place="${STATE.places.indexOf(p)}">
+        <p class="name">${escapeHtml(p.name)}${p.hours ? `<span class="hours-hint">${icon('clock')}Hours</span>` : ''}</p>
         <p class="meta">${[p.category, p.area].filter(Boolean).map(escapeHtml).join(' in ')}</p>
         ${p.notes ? `<p class="notes">${escapeHtml(p.notes)}</p>` : ''}
-      </div>
+      </button>
       ${extLink(p.url, 'map-btn', `${icon('pin')}<span class="sr">Map for ${escapeHtml(p.name)}</span>`)}
     </li>
   `).join('')}</ul>`;
+  list.querySelectorAll('[data-place]').forEach((el) => {
+    el.addEventListener('click', () => {
+      const p = STATE.places[parseInt(el.dataset.place, 10)];
+      showDetailPanel({
+        title: p.name, sub: [p.category, p.area].filter(Boolean).join(' in '),
+        hours: p.hours, notes: p.notes, url: p.url,
+      });
+    });
+  });
 }
 
 /* ---------------- Rendering: Handy screen ---------------- */

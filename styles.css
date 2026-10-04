@@ -592,3 +592,40 @@ body:not(.on-today) .day-strip { display: none; }
 @media (prefers-reduced-motion: no-preference) {
   .day-strip { scroll-behavior: smooth; }
 }
+
+/* ---------- Tap-to-open details ---------- */
+.act-body, .leg-body, .place-body {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+}
+.hours-hint {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: var(--route-bg);
+  color: var(--primary);
+  font-size: 12px;
+  font-weight: 700;
+  vertical-align: 2px;
+  white-space: nowrap;
+}
+.hours-hint .ic { width: 13px; height: 13px; }
+.detail-gap { height: 12px; }
+.detail-row { display: flex; gap: 12px; padding: 10px 0; border-top: 1px solid var(--border); }
+.detail-row > .ic { color: var(--primary); margin-top: 2px; }
+.detail-label { font-size: 13px; font-weight: 600; color: var(--text-soft); }
+.detail-value { font-size: 16px; line-height: 1.4; }
+.detail-value.muted { color: var(--text-soft); }
+.detail-note { margin-top: 2px; font-size: 12px; color: var(--text-soft); }
+.detail-card .picker-btn:first-of-type { margin-top: 12px; }
+.detail-card { max-height: 88vh; overflow-y: auto; }
