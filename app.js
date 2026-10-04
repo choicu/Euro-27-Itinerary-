@@ -65,6 +65,7 @@ function fmtTime(d) {
   return d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+const WEEKDAY = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MON = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 /** "6 Jul" */
 function shortDate(d) { return d ? `${d.getDate()} ${MON[d.getMonth()]}` : ''; }
@@ -174,7 +175,7 @@ function renderDayStrip() {
     const today = i === todayIdx ? ' is-today' : '';
     const loc = escapeHtml(d.endLocation || d.locations[0] || '');
     return `<button class="day-chip${active}${today}" data-idx="${i}" aria-label="Day ${d.day}, ${shortDate(d.date)}, ${loc}${today ? ', today' : ''}">
-      <span class="dt">${shortDate(d.date)}</span><span class="n">${d.day}</span><span class="loc">${loc}</span>
+      <span class="dt">${shortDate(d.date)}</span><span class="n">${d.date ? WEEKDAY[d.date.getDay()] : d.day}</span><span class="loc">${loc}</span>
     </button>`;
   }).join('');
   strip.querySelectorAll('.day-chip').forEach((btn) => {
