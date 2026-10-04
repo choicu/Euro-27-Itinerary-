@@ -672,3 +672,17 @@ body:not(.on-today) .day-strip { display: none; }
   -webkit-user-select: text;
 }
 a.picker-btn { text-decoration: none; }
+
+/* ---------- Share a day ---------- */
+.day-header .title-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.share-btn {
+  flex: 0 0 auto;
+  min-height: 40px;
+  padding: 0 12px;
+  border: 1px solid var(--primary);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--primary);
+  font-size: 13px;
+  font-weight: 700;
+}

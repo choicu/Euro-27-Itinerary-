@@ -200,7 +200,10 @@ function renderDayHeader(d) {
   const header = document.getElementById('day-header');
   const chips = [...d.labelChips, ...d.noteChips];
   header.innerHTML = `
-    <p class="title">Day ${d.day} · ${escapeHtml(dayDateLabel(d))}</p>
+    <div class="title-row">
+      <p class="title">Day ${d.day} · ${escapeHtml(dayDateLabel(d))}</p>
+      <button type="button" class="share-btn" id="share-day" aria-label="Share this day">↗ Share</button>
+    </div>
     <p class="locations">${d.locations.map(escapeHtml).join(' → ') || '—'}</p>
     ${chips.length ? `<div class="chips">${chips.map((c) => `<span class="chip">${escapeHtml(c)}</span>`).join('')}</div>` : ''}
     ${d.stay ? `<button type="button" class="stay-line" id="stay-btn">
@@ -210,6 +213,44 @@ function renderDayHeader(d) {
   `;
   const btn = document.getElementById('stay-btn');
   if (btn) btn.addEventListener('click', () => showStayPanel(d.stay));
+  document.getElementById('share-day').addEventListener('click', (e) => shareDay(d, e.currentTarget));
+}
+
+/** Plain-text summary of one day, built only from what's on screen (sheet data). */
+function dayShareText(d) {
+  const lines = [`📅 Day ${d.day} · ${dayDateLabel(d)} — ${d.locations.join(' → ')}`];
+  if (d.stay) lines.push(`🛏️ Tonight: ${d.stay.name}${d.stay.address ? ` (${d.stay.address})` : ''}`);
+  for (const slot of ['Morning', 'Afternoon', 'Evening', 'Plans']) {
+    const cards = d.slots[slot];
+    if (!cards.length) continue;
+    lines.push('', slot === 'Plans' ? 'Plans' : slot);
+    for (const c of cards) {
+      lines.push(`• ${c.title}`.trimEnd());
+      if (c.notes) lines.push(`   ${c.notes}`);
+      if (c.logistics) lines.push(`   🧭 ${c.logistics}`);
+    }
+  }
+  if (d.empty) lines.push('', 'Nothing planned yet');
+  return lines.join('\n');
+}
+
+/** Phone share menu if available; otherwise copy to clipboard. */
+async function shareDay(d, btn) {
+  const text = dayShareText(d);
+  const label = btn.textContent;
+  try {
+    if (navigator.share) {
+      await navigator.share({ title: `Day ${d.day} plan`, text });
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+    btn.textContent = 'Copied ✓';
+  } catch (err) {
+    if (err && err.name === 'AbortError') return; // user closed the share sheet
+    try { await navigator.clipboard.writeText(text); btn.textContent = 'Copied ✓'; }
+    catch (_) { btn.textContent = 'Couldn\'t share'; }
+  }
+  setTimeout(() => { btn.textContent = label; }, 1800);
 }
 
 /** Tap "Tonight" → big, copyable address for taxis/Uber, plus Maps. Never guesses an address. */
