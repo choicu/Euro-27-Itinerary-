@@ -229,7 +229,7 @@ function renderDayHeader(d) {
       <button type="button" class="share-btn" id="share-day">${icon('share')}<span>Share</span></button>
     </div>
     <h2 class="place-title">${d.locations.map(escapeHtml).join(' <span class="to">→</span> ') || '—'}</h2>
-    ${meta.length ? `<p class="meta-line">${meta.map(escapeHtml).join(', ')}</p>` : ''}
+    ${metaChipsHtml(meta, d)}
     ${people.length ? `<p class="people-line">${icon('users')}<span>${people.map(escapeHtml).join(', ')}</span></p>` : ''}
     ${d.stay ? `<button type="button" class="stay-line" id="stay-btn">
         ${icon('bed', 'stay-ic')}
@@ -240,6 +240,32 @@ function renderDayHeader(d) {
   const btn = document.getElementById('stay-btn');
   if (btn) btn.addEventListener('click', () => showStayPanel(d.stay));
   document.getElementById('share-day').addEventListener('click', (e) => shareDay(d, e.currentTarget));
+}
+
+/**
+ * Day labels from the sheet as small chips. Text is shown exactly as in the sheet; two labels
+ * are skipped only because the title already says them: "Travel Day" (the → does) and
+ * "Travel to X" when X is where the day ends.
+ */
+function metaChipsHtml(meta, d) {
+  const end = (d.locations[d.locations.length - 1] || '').trim().toLowerCase();
+  const shown = meta.filter((c) => {
+    const t = c.trim();
+    if (/^travel day$/i.test(t)) return false;
+    const m = t.match(/^travel to (.+)$/i);
+    return !(m && m[1].trim().toLowerCase() === end);
+  });
+  if (!shown.length) return '';
+  return `<p class="meta-chips">${shown.map((c) => {
+    const transit = /^transit time\b/i.test(c.trim());
+    return `<span class="meta-chip${transit ? ' transit' : ''}">${transit ? icon('clock') : ''}${escapeHtml(c.trim())}</span>`;
+  }).join('')}</p>`;
+}
+
+/** Top of a dismissable panel: grabber (swipe down) and a round close button. */
+function sheetTop(closeId) {
+  return `<div class="sheet-top"><span class="grabber" aria-hidden="true"></span>
+    <button type="button" class="sheet-close" id="${closeId}" aria-label="Close">${icon('close')}</button></div>`;
 }
 
 /** Plain-text summary of one day, built only from what's on screen (sheet data). */
@@ -286,6 +312,7 @@ function showStayPanel(stay) {
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(stay.address)}`
     : stay.url;
   el.innerHTML = `<div class="picker-card" role="dialog" aria-label="Tonight's stay">
+    ${sheetTop('stay-close')}
     <p class="picker-title">${escapeHtml(stay.name)}</p>
     <p class="picker-sub">Tonight's stay</p>
     ${stay.address
@@ -293,7 +320,6 @@ function showStayPanel(stay) {
          <button type="button" class="picker-btn" id="stay-copy"><span>Copy address</span><span class="picker-range">for Uber / taxi</span></button>`
       : `<p class="picker-sub">No address in the sheet yet.</p>`}
     ${mapsUrl ? extLink(mapsUrl, 'picker-btn alt stay-maps', `<span>Open in Maps</span>${icon('pin')}`) : ''}
-    <button type="button" class="picker-skip" id="stay-close">Close</button>
   </div>`;
   el.hidden = false;
   stayPanelOpen = true;
@@ -421,6 +447,7 @@ function showDetailPanel(item) {
     ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(item.address)}`
     : item.url;
   el.innerHTML = `<div class="picker-card detail-card" role="dialog" aria-label="${escapeHtml(item.title)}">
+    ${sheetTop('detail-close')}
     <p class="picker-title">${escapeHtml(item.title)}</p>
     ${item.sub ? `<p class="picker-sub">${escapeHtml(item.sub)}</p>` : '<div class="detail-gap"></div>'}
     ${item.hours ? `<div class="detail-row">
@@ -436,7 +463,6 @@ function showDetailPanel(item) {
     ${item.address ? `<div class="detail-row">${icon('pin')}<div><p class="detail-label">Address</p><p class="detail-value" id="detail-address">${escapeHtml(item.address)}</p></div></div>
       <button type="button" class="picker-btn" id="detail-copy"><span>Copy address</span><span class="picker-range">for Uber / taxi</span></button>` : ''}
     ${mapsUrl ? extLink(mapsUrl, 'picker-btn alt', `<span>Open in Maps</span>${icon('pin')}`) : ''}
-    <button type="button" class="picker-skip" id="detail-close">Close</button>
   </div>`;
   el.hidden = false;
   stayPanelOpen = true;
@@ -473,6 +499,7 @@ function showGroupPicker() {
   stayPanelOpen = false;
   const el = document.getElementById('group-picker');
   el.innerHTML = `<div class="picker-card" role="dialog" aria-label="Who are you?">
+    ${currentGroup() ? sheetTop('group-close') : ''}
     <p class="picker-title">Who are you?</p>
     <p class="picker-sub">We'll show your days of the trip. You only need to pick once.</p>
     ${Object.entries(GROUPS).map(([id, g]) => {
@@ -483,6 +510,7 @@ function showGroupPicker() {
     }).join('')}
   </div>`;
   el.hidden = false;
+  document.getElementById('group-close')?.addEventListener('click', closeStayPanel);
   el.querySelectorAll('button[data-id]').forEach((btn) => btn.addEventListener('click', () => chooseGroup(btn.dataset.id)));
 }
 
@@ -491,6 +519,62 @@ document.getElementById('group-picker').addEventListener('click', (e) => {
   if (e.target.id === 'group-picker' && (currentGroup() || stayPanelOpen)) closeStayPanel();
 });
 document.getElementById('group-chip').addEventListener('click', showGroupPicker);
+
+/** A panel can be dismissed once it isn't the first-time "Who are you?" question. */
+function panelDismissable() { return stayPanelOpen || Boolean(currentGroup()); }
+
+/* Swipe a panel down to close it (only from its top, so scrolling inside still works). */
+(() => {
+  const overlay = document.getElementById('group-picker');
+  let y0 = null, dy = 0, card = null;
+  overlay.addEventListener('touchstart', (e) => {
+    card = e.target.closest('.picker-card');
+    if (!card || !panelDismissable() || card.scrollTop > 0) { y0 = null; return; }
+    y0 = e.touches[0].clientY; dy = 0;
+  }, { passive: true });
+  overlay.addEventListener('touchmove', (e) => {
+    if (y0 === null) return;
+    dy = Math.max(0, e.touches[0].clientY - y0);
+    card.style.transform = dy ? `translateY(${dy}px)` : '';
+  }, { passive: true });
+  overlay.addEventListener('touchend', () => {
+    if (y0 === null) return;
+    y0 = null;
+    if (dy > 90) closeStayPanel();
+    card.style.transform = '';
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && !overlay.hidden && panelDismissable()) closeStayPanel();
+  });
+})();
+
+/* Swipe left/right on the Today screen to change day (ignores screen-edge swipes and scrolls). */
+(() => {
+  const screen = document.getElementById('screen-today');
+  let x0 = null, y0 = 0;
+  screen.addEventListener('touchstart', (e) => {
+    const t = e.touches[0];
+    x0 = (e.touches.length > 1 || t.clientX < 24 || t.clientX > window.innerWidth - 24) ? null : t.clientX;
+    y0 = t.clientY;
+  }, { passive: true });
+  screen.addEventListener('touchend', (e) => {
+    if (x0 === null) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - x0, dy = t.clientY - y0;
+    x0 = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < 2 * Math.abs(dy)) return; // clearly sideways only
+    const before = STATE.currentDayIdx;
+    stepDay(dx < 0 ? 1 : -1);
+    if (STATE.currentDayIdx === before) return;
+    const cls = dx < 0 ? 'enter-from-right' : 'enter-from-left';
+    for (const id of ['day-header', 'timeline']) {
+      const el = document.getElementById(id);
+      el.classList.remove('enter-from-right', 'enter-from-left');
+      void el.offsetWidth; // restart the animation
+      el.classList.add(cls);
+    }
+  }, { passive: true });
+})();
 
 function chooseGroup(id) {
   if (!GROUPS[id]) return;
@@ -813,7 +897,7 @@ const PHONE_RE = /(\+\d[\d ()]{6,}\d|\b1300 \d{3} \d{3}\b|\b112\b)/g;
 function linkifyPhones(text) {
   return escapeHtml(text).replace(PHONE_RE, (m) => {
     const dial = m.replace(/\(0\)/g, '').replace(/[^\d+]/g, '');
-    return `<a class="tel-link" href="tel:${dial}">${m}</a>`;
+    return `<a class="tel-link" href="tel:${dial}">${icon('phone')}${m}</a>`;
   });
 }
 
@@ -978,22 +1062,6 @@ document.querySelectorAll('.bottom-nav button').forEach((btn) => {
 document.getElementById('day-prev').addEventListener('click', () => stepDay(-1));
 document.getElementById('day-next').addEventListener('click', () => stepDay(1));
 document.getElementById('day-today').addEventListener('click', () => goToDay(todayDayIndex()));
-
-// Swipe between days: only clearly horizontal swipes count, so scrolling down a
-// long day (with a little sideways drift) never flips the day by accident.
-let touchStart = null;
-const todayScreen = document.getElementById('screen-today');
-todayScreen.addEventListener('touchstart', (e) => {
-  touchStart = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-}, { passive: true });
-todayScreen.addEventListener('touchend', (e) => {
-  if (!touchStart) return;
-  const dx = e.changedTouches[0].clientX - touchStart.x;
-  const dy = e.changedTouches[0].clientY - touchStart.y;
-  touchStart = null;
-  if (Math.abs(dx) < 60 || Math.abs(dx) < 2 * Math.abs(dy)) return;
-  stepDay(dx < 0 ? 1 : -1);
-}, { passive: true });
 
 /* ---------------- Data load + refresh ---------------- */
 
