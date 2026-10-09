@@ -229,7 +229,9 @@ function renderDayHeader(d) {
       <button type="button" class="share-btn" id="share-day">${icon('share')}<span>Share</span></button>
     </div>
     <h2 class="place-title">${d.locations.map(escapeHtml).join(' <span class="to">→</span> ') || '—'}</h2>
+    <div id="next-up" aria-live="polite"></div>
     ${metaChipsHtml(meta, d)}
+    <p class="wx-line" id="wx-line" hidden></p>
     ${people.length ? `<p class="people-line">${icon('users')}<span>${people.map(escapeHtml).join(', ')}</span></p>` : ''}
     ${d.stay ? `<button type="button" class="stay-line" id="stay-btn">
         ${icon('bed', 'stay-ic')}
@@ -625,6 +627,153 @@ function renderToday() {
   const d = STATE.days[STATE.currentDayIdx];
   renderDayHeader(d);
   renderTimeline(d);
+  renderNextUp(d);
+  renderWeather(d);
+}
+
+/* ---------------- Next up (travel days, on the day itself) ---------------- */
+
+const DONE_KEY = 'europe2027_done_v1';
+function loadDone() { try { return JSON.parse(localStorage.getItem(DONE_KEY)) || {}; } catch (_) { return {}; } }
+function saveDone(v) { try { localStorage.setItem(DONE_KEY, JSON.stringify(v)); } catch (_) { /* not fatal */ } }
+const legKey = (d, c, i) => `${d.day}|${i}|${c.title}`;
+let lastDoneKey = null;
+
+/** Travel legs of a day, in the sheet's order. */
+function dayLegs(d) {
+  const out = [];
+  for (const slot of ['Morning', 'Afternoon', 'Evening', 'Plans']) out.push(...d.slots[slot].filter((c) => c.mode));
+  return out;
+}
+
+/** Only on the actual day: the first leg not marked done, with a Done button (saved on this phone). */
+function renderNextUp(d) {
+  const el = document.getElementById('next-up');
+  const legs = dayLegs(d);
+  if (STATE.currentDayIdx !== todayDayIndex() || !legs.length) { el.innerHTML = ''; return; }
+  const done = loadDone();
+  const keys = legs.map((c, i) => legKey(d, c, i));
+  // Dim finished legs in the day list.
+  document.querySelectorAll('#timeline .leg').forEach((li) => {
+    const c = CARD_REFS[parseInt(li.querySelector('[data-card]')?.dataset.card, 10)];
+    const i = legs.indexOf(c);
+    const isDone = i !== -1 && Boolean(done[keys[i]]);
+    li.classList.toggle('done', isDone);
+    const node = li.querySelector('.leg-node');
+    if (node && c) node.innerHTML = icon(isDone ? 'check' : (c.mode === 'route' ? 'route' : c.mode));
+  });
+  const n = keys.findIndex((k) => !done[k]);
+  // Undo always reverses the latest leg marked done today (also after closing the app).
+  if (!(lastDoneKey && done[lastDoneKey] && keys.includes(lastDoneKey))) lastDoneKey = [...keys].reverse().find((k) => done[k]) || null;
+  const undo = lastDoneKey ? '<button type="button" class="nu-undo" id="nu-undo">Undo</button>' : '';
+  if (n === -1) {
+    el.innerHTML = `<div class="next-up all-done">${icon('check')}<p class="nu-title">All travel done for today</p>${undo}</div>`;
+  } else {
+    const c = legs[n];
+    el.innerHTML = `<div class="next-up">
+      <p class="nu-label">Next up · ${n + 1} of ${legs.length}</p>
+      <div class="nu-row">
+        <span class="nu-ic">${icon(c.mode === 'route' ? 'route' : c.mode)}</span>
+        <div class="nu-body">
+          <p class="nu-title">${escapeHtml(c.title)}</p>
+          ${c.logistics ? `<p class="nu-time">${escapeHtml(c.logistics)}</p>` : ''}
+          ${c.notes ? `<p class="nu-notes">${escapeHtml(c.notes)}</p>` : ''}
+        </div>
+      </div>
+      <div class="nu-actions">${undo}<button type="button" class="nu-done" id="nu-done">${icon('check')}Done</button></div>
+    </div>`;
+    document.getElementById('nu-done').addEventListener('click', () => {
+      const v = loadDone(); v[keys[n]] = true; saveDone(v); lastDoneKey = keys[n]; renderNextUp(d);
+      (document.getElementById('nu-done') || document.getElementById('nu-undo'))?.focus();
+    });
+  }
+  document.getElementById('nu-undo')?.addEventListener('click', () => {
+    const v = loadDone(); delete v[lastDoneKey]; saveDone(v); lastDoneKey = null; renderNextUp(d);
+    document.getElementById('nu-done')?.focus();
+  });
+}
+
+/* ---------------- Weather (Open-Meteo, free, no key) ---------------- */
+
+/* Approximate town-centre coordinates for each itinerary Location. Add new locations here. */
+const WX_PLACES = {
+  Rome: [41.89, 12.49], Tuscany: [43.27, 11.99], Cortona: [43.27, 11.99], Sorrento: [40.63, 14.38],
+  Positano: [40.63, 14.48], Capri: [40.55, 14.24], Naples: [40.85, 14.27], Mykonos: [37.45, 25.33],
+  Paros: [37.12, 25.24], Milos: [36.73, 24.45], Athens: [37.98, 23.73], Brussels: [50.85, 4.35],
+  Tomorrowland: [51.09, 4.38], Boom: [51.09, 4.38], Antwerp: [51.22, 4.40], Amsterdam: [52.37, 4.90],
+};
+const WX_KEY = 'europe2027_wx_v1';
+const WX_MAX_AGE = 3 * 60 * 60 * 1000; // refetch after 3 hours
+const WX_DAYS_AHEAD = 7;               // forecasts further out aren't worth showing
+
+function wxLabel(code) {
+  if (code === 0) return ['sun', 'Clear'];
+  if (code <= 2) return ['cloudSun', 'Partly cloudy'];
+  if (code === 3) return ['cloud', 'Cloudy'];
+  if (code === 45 || code === 48) return ['fog', 'Fog'];
+  if (code >= 51 && code <= 57) return ['rain', 'Drizzle'];
+  if (code >= 61 && code <= 67) return ['rain', 'Rain'];
+  if (code >= 71 && code <= 77) return ['cloud', 'Snow'];
+  if (code >= 80 && code <= 82) return ['rain', 'Showers'];
+  if (code === 85 || code === 86) return ['cloud', 'Snow showers'];
+  if (code >= 95) return ['storm', 'Thunderstorms'];
+  return ['cloud', ''];
+}
+const isoDate = (dt) => `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, '0')}-${String(dt.getDate()).padStart(2, '0')}`;
+function loadWx() { try { return JSON.parse(localStorage.getItem(WX_KEY)) || {}; } catch (_) { return {}; } }
+function saveWx(v) { try { localStorage.setItem(WX_KEY, JSON.stringify(v)); } catch (_) { /* not fatal */ } }
+
+async function fetchWx(place) {
+  const [lat, lon] = WX_PLACES[place];
+  const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
+    + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max'
+    + '&timezone=auto&forecast_days=16';
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const r = await fetch(url, { signal: ctl.signal, referrerPolicy: 'no-referrer' });
+    if (!r.ok) return null;
+    const j = await r.json();
+    if (!j || !j.daily || !Array.isArray(j.daily.time)) return null;
+    const all = loadWx(); all[place] = { at: Date.now(), daily: j.daily }; saveWx(all);
+    return all[place];
+  } catch (_) { return null; } finally { clearTimeout(t); }
+}
+
+/** Forecast line for where the day ends up, once the day is within a week. Hidden otherwise. */
+async function renderWeather(d) {
+  const el = document.getElementById('wx-line');
+  if (!el || !d.date) return;
+  const place = d.endLocation || d.locations[d.locations.length - 1];
+  const ahead = daysUntil(d.date);
+  if (!WX_PLACES[place] || ahead < 0 || ahead > WX_DAYS_AHEAD) return;
+  const dayIdx = STATE.currentDayIdx;
+  const show = (entry) => {
+    if (!entry || STATE.currentDayIdx !== dayIdx || !document.getElementById('wx-line')) return false;
+    const i = entry.daily.time.indexOf(isoDate(d.date));
+    if (i === -1) return false;
+    const v = (k) => entry.daily[k] ? entry.daily[k][i] : null;
+    const [ic, label] = wxLabel(v('weather_code'));
+    const hi = v('temperature_2m_max'), lo = v('temperature_2m_min');
+    const rain = v('precipitation_probability_max'), uv = v('uv_index_max');
+    const parts = [];
+    if (hi != null && lo != null) parts.push(`<strong>${Math.round(hi)}°</strong> / ${Math.round(lo)}°`);
+    if (label) parts.push(escapeHtml(label));
+    if (rain != null) parts.push(`Rain ${Math.round(rain)}%`);
+    if (uv != null) {
+      const u = Math.round(uv);
+      parts.push(`UV ${u}${u >= 8 ? ' (limit midday sun)' : u >= 3 ? ' (sun protection)' : ''}`);
+    }
+    const when = new Date(entry.at).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
+    const elNow = document.getElementById('wx-line');
+    elNow.innerHTML = `${icon(ic)}<span class="wx-main">${escapeHtml(place)} · ${parts.join(' · ')}</span>
+      <span class="wx-src">Forecast ${escapeHtml(when)} · ${extLink('https://open-meteo.com/', 'wx-credit', 'Weather data by Open-Meteo.com')}</span>`;
+    elNow.hidden = false;
+    return true;
+  };
+  const cached = loadWx()[place];
+  const shown = show(cached);
+  if (!cached || Date.now() - cached.at > WX_MAX_AGE || !shown) show(await fetchWx(place));
 }
 
 /* ---------------- Rendering: Overview screen ---------------- */
