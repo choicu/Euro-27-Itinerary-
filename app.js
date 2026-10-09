@@ -177,8 +177,10 @@ function renderDayStrip() {
   const key = `${visibleIdx().join(',')}|${todayIdx}`;
   if (key === stripKey) {
     // Same days on the strip: just move the highlight (cheap, keeps scrolling smooth).
-    strip.querySelector('.day-chip.active')?.classList.remove('active');
-    strip.querySelector(`.day-chip[data-idx="${STATE.currentDayIdx}"]`)?.classList.add('active');
+    const old = strip.querySelector('.day-chip.active');
+    if (old) { old.classList.remove('active'); old.removeAttribute('aria-current'); }
+    const now = strip.querySelector(`.day-chip[data-idx="${STATE.currentDayIdx}"]`);
+    if (now) { now.classList.add('active'); now.setAttribute('aria-current', 'true'); }
     finishDayStrip(strip);
     return;
   }
@@ -188,7 +190,7 @@ function renderDayStrip() {
     const active = i === STATE.currentDayIdx ? ' active' : '';
     const today = i === todayIdx ? ' is-today' : '';
     const loc = escapeHtml(d.endLocation || d.locations[0] || '');
-    return `<button class="day-chip${active}${today}" data-idx="${i}" aria-label="Day ${d.day}, ${shortDate(d.date)}, ${loc}${today ? ', today' : ''}">
+    return `<button class="day-chip${active}${today}" data-idx="${i}"${active ? ' aria-current="true"' : ''} aria-label="Day ${d.day}, ${shortDate(d.date)}, ${loc}${today ? ', today' : ''}">
       <span class="dt">${shortDate(d.date)}</span><span class="n">${d.date ? WEEKDAY[d.date.getDay()] : d.day}</span><span class="loc">${loc}</span>
     </button>`;
   }).join('');
@@ -290,7 +292,9 @@ function dayShareText(d) {
 
 /** Phone share menu if available; otherwise copy to clipboard. */
 async function shareDay(d, btn) {
-  const text = dayShareText(d);
+  // Link opens this day (with the same ?for=… view as the person sharing).
+  const url = `${location.origin}${location.pathname}${location.search}#day-${d.day}`;
+  const text = `${dayShareText(d)}\n\n${url}`;
   const label = btn.innerHTML;
   try {
     if (navigator.share) {
@@ -325,6 +329,7 @@ function showStayPanel(stay) {
   </div>`;
   el.hidden = false;
   stayPanelOpen = true;
+  panelOpened('stay-close');
   document.getElementById('stay-close').addEventListener('click', closeStayPanel);
   const copy = document.getElementById('stay-copy');
   if (copy) copy.addEventListener('click', async () => {
@@ -339,7 +344,25 @@ function showStayPanel(stay) {
   });
 }
 let stayPanelOpen = false;
-function closeStayPanel() { stayPanelOpen = false; closeOverlay(); }
+let panelInHistory = false;
+let panelTrigger = null;
+/** Called after a panel's HTML is in place: Back-button step, modal semantics, focus. */
+function panelOpened(focusId) {
+  if (!panelInHistory && panelDismissable()) {
+    try { history.pushState({ panel: true }, '', location.href); panelInHistory = true; } catch (_) { /* ignore */ }
+  }
+  const active = document.activeElement;
+  if (active && active !== document.body && !active.closest('#group-picker')) panelTrigger = active;
+  document.querySelectorAll('body > *:not(#group-picker):not(script)').forEach((el) => { el.inert = true; });
+  const card = document.querySelector('#group-picker .picker-card');
+  if (card) card.setAttribute('aria-modal', 'true');
+  (document.getElementById(focusId) || card?.querySelector('button, a'))?.focus();
+}
+function closeStayPanel() {
+  stayPanelOpen = false;
+  closeOverlay();
+  if (panelInHistory) { panelInHistory = false; try { history.back(); } catch (_) { /* ignore */ } }
+}
 
 const CATEGORY_ICON = {
   Dining: 'food', Sightseeing: 'camera', Activity: 'star', Entertainment: 'music', Accomodation: 'bed', Transit: 'route',
@@ -468,6 +491,7 @@ function showDetailPanel(item) {
   </div>`;
   el.hidden = false;
   stayPanelOpen = true;
+  panelOpened('detail-close');
   document.getElementById('detail-close').addEventListener('click', closeStayPanel);
   const copy = document.getElementById('detail-copy');
   if (copy) copy.addEventListener('click', async () => {
@@ -512,6 +536,7 @@ function showGroupPicker() {
     }).join('')}
   </div>`;
   el.hidden = false;
+  panelOpened('group-close');
   document.getElementById('group-close')?.addEventListener('click', closeStayPanel);
   el.querySelectorAll('button[data-id]').forEach((btn) => btn.addEventListener('click', () => chooseGroup(btn.dataset.id)));
 }
@@ -583,14 +608,21 @@ function chooseGroup(id) {
   groupId = id;
   saveGroup(id);
   closeOverlay();
-  STATE.currentDayIdx = pickInitialDayIndex(STATE.days);
+  if (panelInHistory) { panelInHistory = false; try { history.back(); } catch (_) { /* ignore */ } }
+  const linked = dayIdxFromHash(location.hash);
+  STATE.currentDayIdx = linked !== -1 ? linked : pickInitialDayIndex(STATE.days);
   renderCurrentScreen();
   window.scrollTo(0, 0);
   setTimeout(maybeShowInstallTip, 1200);
 }
 
-/** Close the picker overlay. */
-function closeOverlay() { document.getElementById('group-picker').hidden = true; }
+/** Close the picker overlay, give the page back and return focus to what opened it. */
+function closeOverlay() {
+  document.getElementById('group-picker').hidden = true;
+  document.querySelectorAll('body > [inert]').forEach((el) => { el.inert = false; });
+  if (panelTrigger && document.contains(panelTrigger)) panelTrigger.focus({ preventScroll: true });
+  panelTrigger = null;
+}
 
 /*
  * Couple chip lives in the pinned header (never scrolls away). Shown on Today and
@@ -629,6 +661,7 @@ function renderToday() {
   renderTimeline(d);
   renderNextUp(d);
   renderWeather(d);
+  if (currentScreen === 'today') syncUrl(false);
 }
 
 /* ---------------- Next up (travel days, on the day itself) ---------------- */
@@ -859,13 +892,14 @@ function renderPlacesFilter() {
   const filterEl = document.getElementById('places-filter');
   const opts = ['All', ...cities];
   filterEl.innerHTML = opts.map((c) =>
-    `<button class="filter-chip${c === placesFilter ? ' active' : ''}" data-city="${escapeHtml(c)}">${escapeHtml(c)}</button>`
+    `<button class="filter-chip${c === placesFilter ? ' active' : ''}" aria-pressed="${c === placesFilter}" data-city="${escapeHtml(c)}">${escapeHtml(c)}</button>`
   ).join('');
   filterEl.querySelectorAll('.filter-chip').forEach((btn) => {
     btn.addEventListener('click', () => {
       placesFilter = btn.dataset.city;
       renderPlacesFilter();
       renderPlacesList();
+      [...filterEl.querySelectorAll('.filter-chip')].find((b) => b.dataset.city === placesFilter)?.focus({ preventScroll: true });
     });
   });
 }
@@ -1203,11 +1237,15 @@ function renderHandy() {
 
 let currentScreen = 'today';
 
-function showScreen(name) {
+function showScreen(name, { push = true } = {}) {
   currentScreen = name;
   document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
   document.getElementById(`screen-${name}`).classList.add('active');
-  document.querySelectorAll('.bottom-nav button').forEach((b) => b.classList.toggle('active', b.dataset.screen === name));
+  document.querySelectorAll('.bottom-nav button').forEach((b) => {
+    const on = b.dataset.screen === name;
+    b.classList.toggle('active', on);
+    if (on) b.setAttribute('aria-current', 'page'); else b.removeAttribute('aria-current');
+  });
   const titles = { today: 'Europe 2027', overview: 'The route', places: 'Places to try', search: 'Search', handy: 'Handy info' };
   document.getElementById('topbar-title').textContent = titles[name];
   renderGroupBar();
@@ -1216,7 +1254,48 @@ function showScreen(name) {
   // Let pinned elements (search box) sit exactly under the top bar, whatever its height.
   document.documentElement.style.setProperty('--topbar-h', `${document.querySelector('.topbar').offsetHeight}px`);
   window.scrollTo(0, 0);
+  syncUrl(push);
 }
+
+/* ---------------- Address bar: #day-12, #route, #places, #search, #handy ----------------
+ * Changing tab adds a Back step; changing day just updates the address (so Back from Places
+ * returns to the day you were on, not through every day you swiped past). */
+const HASH_SCREEN = { route: 'overview', places: 'places', search: 'search', handy: 'handy' };
+function currentHash() {
+  if (currentScreen !== 'today') return `#${currentScreen === 'overview' ? 'route' : currentScreen}`;
+  const d = visibleIdx().includes(STATE.currentDayIdx) ? STATE.days[STATE.currentDayIdx] : null;
+  return d ? `#day-${d.day}` : '';
+}
+function syncUrl(push) {
+  const h = currentHash();
+  if (!h || location.hash === h) return;
+  const url = location.pathname + location.search + h;
+  try { push ? history.pushState({ screen: currentScreen }, '', url) : history.replaceState(history.state, '', url); } catch (_) { /* ignore */ }
+}
+/** Day index named by a #day-N address, if it's one this person can see. */
+function dayIdxFromHash(h) {
+  const m = /^#day-(\d+)$/.exec(h || '');
+  if (!m) return -1;
+  const idx = STATE.days.findIndex((d) => String(d.day) === m[1]);
+  return visibleIdx().includes(idx) ? idx : -1;
+}
+function applyHash(h) {
+  const scr = HASH_SCREEN[(h || '').slice(1)];
+  if (scr) { showScreen(scr, { push: false }); renderCurrentScreen(); return; }
+  const idx = dayIdxFromHash(h);
+  if (idx !== -1) STATE.currentDayIdx = idx;
+  showScreen('today', { push: false });
+  renderToday();
+}
+window.addEventListener('popstate', () => {
+  // Back with a panel open closes the panel (unless it's the first-time "Who are you?").
+  if (!document.getElementById('group-picker').hidden) {
+    panelInHistory = false;
+    if (panelDismissable()) closeStayPanel();
+    return;
+  }
+  if (location.hash !== currentHash()) applyHash(location.hash);
+});
 
 function renderCurrentScreen() {
   if (currentScreen === 'today') renderToday();
@@ -1296,7 +1375,11 @@ async function boot() {
   document.body.classList.remove('ready');
   // 1. Show the saved copy instantly (works with no signal).
   applyData(await loadLocalCSV());
+  const startHash = location.hash;
+  const linked = dayIdxFromHash(startHash);
+  if (linked !== -1) STATE.currentDayIdx = linked;
   renderToday();
+  if (HASH_SCREEN[startHash.slice(1)]) applyHash(startHash);
   renderSyncFooter();
   document.body.classList.add('ready');
   if (isFriendsMode() && !currentGroup()) showGroupPicker();
