@@ -727,6 +727,7 @@ async function fetchWx(place) {
   const [lat, lon] = WX_PLACES[place];
   const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}`
     + '&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,uv_index_max'
+    + '&current=temperature_2m,weather_code,is_day'
     + '&timezone=auto&forecast_days=16';
   const ctl = new AbortController();
   const t = setTimeout(() => ctl.abort(), 8000);
@@ -735,7 +736,7 @@ async function fetchWx(place) {
     if (!r.ok) return null;
     const j = await r.json();
     if (!j || !j.daily || !Array.isArray(j.daily.time)) return null;
-    const all = loadWx(); all[place] = { at: Date.now(), daily: j.daily }; saveWx(all);
+    const all = loadWx(); all[place] = { at: Date.now(), daily: j.daily, current: j.current || null }; saveWx(all);
     return all[place];
   } catch (_) { return null; } finally { clearTimeout(t); }
 }
@@ -746,12 +747,13 @@ async function renderWeather(d) {
   if (!el || !d.date) return;
   const place = d.endLocation || d.locations[d.locations.length - 1];
   const ahead = daysUntil(d.date);
-  if (!WX_PLACES[place] || ahead < 0 || ahead > WX_DAYS_AHEAD) return;
+  if (!WX_PLACES[place]) return;
+  const forecastable = ahead >= 0 && ahead <= WX_DAYS_AHEAD;
   const dayIdx = STATE.currentDayIdx;
   const show = (entry) => {
     if (!entry || STATE.currentDayIdx !== dayIdx || !document.getElementById('wx-line')) return false;
-    const i = entry.daily.time.indexOf(isoDate(d.date));
-    if (i === -1) return false;
+    const i = forecastable ? entry.daily.time.indexOf(isoDate(d.date)) : -1;
+    if (i === -1) return showCurrent(entry);
     const v = (k) => entry.daily[k] ? entry.daily[k][i] : null;
     const [ic, label] = wxLabel(v('weather_code'));
     const hi = v('temperature_2m_max'), lo = v('temperature_2m_min');
@@ -771,10 +773,34 @@ async function renderWeather(d) {
     elNow.hidden = false;
     return true;
   };
+  /* No forecast for this date (more than a week away, or already past): show the weather there right now. */
+  const showCurrent = (entry) => {
+    const cur = entry.current;
+    if (!cur || cur.temperature_2m == null) return false;
+    const night = cur.is_day === 0;
+    let [ic, label] = wxLabel(cur.weather_code);
+    if (night && (ic === 'sun' || ic === 'cloudSun')) ic = 'moon';
+    const age = Date.now() - entry.at;
+    const t = new Date(entry.at);
+    const when = age < 6 * 60 * 60 * 1000
+      ? `Checked ${t.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit' })} your time`
+      : `Last checked ${t.toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`;
+    const el2 = document.getElementById('wx-line');
+    el2.innerHTML = `${icon(ic)}<span class="wx-main">${escapeHtml(place)} now · <strong>${Math.round(cur.temperature_2m)}°</strong>${label ? ` · ${escapeHtml(label)}` : ''}</span>
+      <span class="wx-src">${escapeHtml(when)}${ahead > WX_DAYS_AHEAD ? ' · Forecast shows a week out' : ''} · ${extLink('https://open-meteo.com/', 'wx-credit', 'Weather data by Open-Meteo.com')}</span>`;
+    el2.hidden = false;
+    return true;
+  };
   const cached = loadWx()[place];
   const shown = show(cached);
-  if (!cached || Date.now() - cached.at > WX_MAX_AGE || !shown) show(await fetchWx(place));
+  const stale = !cached || Date.now() - cached.at > WX_MAX_AGE || !shown;
+  // Don't retry the same place more than once a minute (e.g. offline while swiping through days).
+  if (stale && Date.now() - (WX_TRIED[place] || 0) > 60000) {
+    WX_TRIED[place] = Date.now();
+    show(await fetchWx(place));
+  }
 }
+const WX_TRIED = {};
 
 /* ---------------- Rendering: Overview screen ---------------- */
 
