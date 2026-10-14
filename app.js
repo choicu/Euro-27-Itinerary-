@@ -387,17 +387,91 @@ function hoursHint(card) {
   return card.hours ? `<span class="hours-hint">${icon('clock')}Hours</span>` : '';
 }
 
-/** Ordinary activity: a light row on the day's line. Tap the text for details. */
+/** "Need to know" badge on rows that have requirements in the sheet (tickets, payment, prep). */
+function reqHint(card) {
+  return card.requirements ? `<span class="req-hint">${icon('ticket')}Need to know</span>` : '';
+}
+
+/** Does a row have anything to show when expanded? */
+function hasMore(card) {
+  return Boolean(card.requirements || card.hours || card.address || card.hasLink);
+}
+
+/* Known requirement labels → the app's own line icons (unknown labels keep the sheet's emoji). */
+const REQ_ICON = [
+  [/^ticket/i, 'ticket'], [/^(pay|how|buy)/i, 'card'], [/^(fare|bag)/i, 'bag'],
+  [/^before/i, 'clock'], [/^on the day/i, 'calendar'], [/^at\b/i, 'pin'],
+];
+const LEAD_EMOJI = /^(\p{Extended_Pictographic}|\p{Regional_Indicator})[\uFE0F\u200D\p{Extended_Pictographic}\p{Emoji_Modifier}]*\s*/u;
+
+/** One requirements line: "🎫 Ticket: YES ..." → icon, bold label, text. */
+function reqLineHtml(line) {
+  const lead = line.match(LEAD_EMOJI);
+  const emoji = lead ? lead[0].trim() : '';
+  const rest = lead ? line.slice(lead[0].length) : line;
+  const m = rest.match(/^([^:]{1,24}):\s*(.*)$/u);
+  const label = m ? m[1] : '';
+  const known = label && REQ_ICON.find(([re]) => re.test(label));
+  const mark = known ? icon(known[1]) : (emoji && label ? `<span aria-hidden="true">${escapeHtml(emoji)}</span>` : icon('info'));
+  const text = m ? `<b>${escapeHtml(m[1])}:</b> ${escapeHtml(m[2])}` : escapeHtml(rest);
+  return `<li class="req-line"><span class="req-mark">${mark}</span><span class="req-text">${text}</span></li>`;
+}
+
+/** Expanded detail shown inline under a row: tickets & payment, hours, address, Maps. */
+function expandHtml(card, id) {
+  const lines = (card.requirements || '').split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const mapsUrl = card.address
+    ? `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(card.address)}`
+    : (card.hasLink ? card.url : null);
+  return `<div class="xp" id="xp-${id}" hidden>
+    ${lines.length ? `<div class="req-box">
+      <p class="detail-label">${icon('ticket')}Need to know</p>
+      <ul class="req-lines">${lines.map(reqLineHtml).join('')}</ul>
+    </div>` : ''}
+    ${card.hours ? `<div class="detail-row">${icon('clock')}<div>
+      <p class="detail-label">Opening hours</p>
+      <p class="detail-value">${escapeHtml(card.hours)}</p>
+      <p class="detail-note">From Google Maps / official sites, Oct 2026. Check before you go.</p>
+    </div></div>` : ''}
+    ${card.address ? `<div class="detail-row">${icon('pin')}<div>
+      <p class="detail-label">Address</p>
+      <p class="detail-value xp-addr">${escapeHtml(card.address)}</p>
+    </div></div>
+    <button type="button" class="picker-btn xp-copy" data-addr="${id}"><span>Copy address</span><span class="picker-range">for Uber / taxi</span></button>` : ''}
+    ${mapsUrl ? extLink(mapsUrl, 'picker-btn alt', `<span>Open in Maps</span>${icon('pin')}`) : ''}
+  </div>`;
+}
+
+/**
+ * The tappable text of a row: a toggle when there's more to show, plain text otherwise.
+ * Spans (not <p>) inside the button; the title is the button's name, the rest its description.
+ */
+function bodyHtml(card, cls, parts) {
+  const id = ref(card);
+  const desc = parts.extra.map((x, i) => x.replace('<span ', `<span id="d${id}-${i}" `)).join('');
+  const title = `<span class="${parts.titleCls}" id="t${id}">${escapeHtml(card.title)}<span class="sr">. </span><span class="hints">${reqHint(card)}${hoursHint(card)}</span></span>`;
+  if (!hasMore(card)) return `<div class="${cls}" data-card="${id}">${title}${desc}</div>`;
+  const ids = parts.extra.map((_, i) => `d${id}-${i}`).join(' ');
+  return `<div class="xp-wrap">
+      <button type="button" class="${cls} xp-toggle" data-card="${id}" aria-expanded="false" aria-controls="xp-${id}"
+        aria-labelledby="t${id}"${ids ? ` aria-describedby="${ids}"` : ''}>
+        <span class="xp-main">${title}${desc}</span>
+        <span class="xp-chev" aria-hidden="true">${icon('chevron')}</span>
+      </button>
+      ${expandHtml(card, id)}
+    </div>`;
+}
+
+/** Ordinary activity: a light row on the day's line. Tap the text to expand details in place. */
 function rowHtml(card) {
   const cls = card.isCheckIn ? ' is-checkin' : card.isCheckOut ? ' is-checkout' : '';
+  const extra = [];
+  if (card.notes) extra.push(`<span class="act-notes">${escapeHtml(card.notes)}</span>`);
+  if (card.logistics) extra.push(`<span class="act-logi">${icon('route')}<span>${escapeHtml(card.logistics)}</span></span>`);
   return `
     <li class="act${cls}">
       <span class="act-ic">${icon(rowIcon(card))}</span>
-      <button type="button" class="act-body" data-card="${ref(card)}">
-        <p class="act-title">${escapeHtml(card.title)}${hoursHint(card)}</p>
-        ${card.notes ? `<p class="act-notes">${escapeHtml(card.notes)}</p>` : ''}
-        ${card.logistics ? `<p class="act-logi">${icon('route')}<span>${escapeHtml(card.logistics)}</span></p>` : ''}
-      </button>
+      ${bodyHtml(card, 'act-body', { titleCls: 'act-title', extra })}
       ${mapBtn(card)}
     </li>`;
 }
@@ -407,16 +481,17 @@ function routeHtml(legs) {
   return `
     <li class="route">
       <ol class="legs">
-        ${legs.map((c) => `
+        ${legs.map((c) => {
+          const extra = [];
+          if (c.logistics) extra.push(`<span class="leg-time">${escapeHtml(c.logistics)}</span>`);
+          if (c.notes) extra.push(`<span class="leg-notes">${escapeHtml(c.notes)}</span>`);
+          return `
           <li class="leg">
             <span class="leg-node">${icon(c.mode === 'route' ? 'route' : c.mode)}</span>
-            <button type="button" class="leg-body" data-card="${ref(c)}">
-              <p class="leg-title">${escapeHtml(c.title)}${hoursHint(c)}</p>
-              ${c.logistics ? `<p class="leg-time">${escapeHtml(c.logistics)}</p>` : ''}
-              ${c.notes ? `<p class="leg-notes">${escapeHtml(c.notes)}</p>` : ''}
-            </button>
+            ${bodyHtml(c, 'leg-body', { titleCls: 'leg-title', extra })}
             ${mapBtn(c)}
-          </li>`).join('')}
+          </li>`;
+        }).join('')}
       </ol>
     </li>`;
 }
@@ -451,16 +526,32 @@ function renderTimeline(d) {
         <ul class="acts">${slotHtml(d.slots[slot])}</ul>
       </section>
     `).join('');
-  timeline.querySelectorAll('[data-card]').forEach((el) => {
-    el.addEventListener('click', () => {
-      const c = CARD_REFS[parseInt(el.dataset.card, 10)];
-      showDetailPanel({
-        title: c.title, hours: c.hours, notes: c.notes, logistics: c.logistics,
-        address: c.address, url: c.hasLink ? c.url : null,
-      });
-    });
-  });
 }
+
+/** Expand / collapse a timeline row in place. Several can be open at once. */
+function setExpanded(btn, open) {
+  const panel = document.getElementById(btn.getAttribute('aria-controls'));
+  if (!panel) return;
+  btn.setAttribute('aria-expanded', String(open));
+  panel.hidden = !open;
+  btn.closest('li').classList.toggle('expanded', open);
+}
+
+document.getElementById('timeline').addEventListener('click', async (e) => {
+  const toggle = e.target.closest('.xp-toggle');
+  if (toggle) { setExpanded(toggle, toggle.getAttribute('aria-expanded') !== 'true'); return; }
+  const copy = e.target.closest('.xp-copy');
+  if (!copy) return;
+  const addrEl = copy.closest('.xp').querySelector('.xp-addr');
+  const text = addrEl ? addrEl.textContent : '';
+  let ok = false;
+  try { await navigator.clipboard.writeText(text); ok = true; } catch (_) { /* fall back */ }
+  if (!ok && addrEl) {
+    const r = document.createRange(); r.selectNodeContents(addrEl);
+    const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(r);
+  }
+  copy.querySelector('span').textContent = ok ? 'Copied ✓' : 'Selected — tap Copy';
+});
 
 /**
  * Tap a place → slide-up panel: opening hours (from the sheet), notes, travel info,
@@ -1015,7 +1106,7 @@ function searchItems() {
         items.push({
           kind: 'act', dayIdx: i, card: c,
           title: c.title, sub: `Day ${d.day} · ${dayDateLabel(d)} · ${c.location || d.endLocation || ''}`,
-          hay: fold([c.title, c.notes, c.logistics, c.location, c.hours, c.linkLabel].join(' ')),
+          hay: fold([c.title, c.notes, c.logistics, c.location, c.hours, c.linkLabel, c.requirements].join(' ')),
         });
       }
     }
@@ -1060,7 +1151,7 @@ function renderSearch() {
 function matchedOutsideTitle(h, q) {
   if (fold(h.title).includes(q)) return '';
   const src = h.kind === 'place' ? STATE.places[h.placeIdx] : h.card;
-  for (const f of [src.notes, src.logistics, src.hours]) {
+  for (const f of [src.notes, src.logistics, src.hours, src.requirements]) {
     if (f && fold(f).includes(q)) return `<span class="hit-snip">${markMatch(f, q)}</span>`;
   }
   return '';
@@ -1086,6 +1177,7 @@ document.getElementById('search-results').addEventListener('click', (e) => {
   const ri = CARD_REFS.indexOf(h.card);
   const row = ri === -1 ? null : document.querySelector(`[data-card="${ri}"]`);
   if (row) {
+    if (row.classList.contains('xp-toggle')) setExpanded(row, true);
     const li = row.closest('li');
     li.scrollIntoView({ block: 'center' });
     li.classList.add('flash');

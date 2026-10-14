@@ -127,6 +127,7 @@ export function parseItinerary(csvText) {
     url: findHeaderIndex(header, (h) => h === 'URL'), // optional, per checkpoint (a)
     address: findHeaderIndex(header, (h) => h === 'Address'), // optional: street address
     hours: findHeaderIndex(header, (h) => h === 'Hours'),     // optional: opening hours
+    requirements: findHeaderIndex(header, (h) => h === 'Requirements'), // optional: tickets & payment
   };
   for (const k of ['dayLabel', 'date', 'location', 'slot', 'title', 'category', 'link', 'notes', 'logistics']) {
     if (col[k] === -1) {
@@ -189,8 +190,9 @@ export function parseItinerary(csvText) {
     const link = get(col.link);
     const notes = get(col.notes);
     const logistics = get(col.logistics);
+    const requirements = col.requirements >= 0 ? get(col.requirements) : '';
     // Skip row: placeholder slot with nothing to show (3.3 "Skip row" rule).
-    if (!title && !link && !notes && !logistics) continue;
+    if (!title && !link && !notes && !logistics && !requirements) continue;
 
     const category = get(col.category);
     const urlCol = col.url >= 0 ? get(col.url) : '';
@@ -210,6 +212,7 @@ export function parseItinerary(csvText) {
       hasLink: Boolean(urlCol || link),
       address: col.address >= 0 ? get(col.address) : '',
       hours: col.hours >= 0 ? get(col.hours) : '',
+      requirements,
       location: locVal, // Map button only shown when the sheet's Link/URL is filled
       isStay: isStayCard(category, title),
       isCheckIn: /^check[ -]?in/i.test(title) || /^take taxi and check in/i.test(title) || (category === 'Accomodation' && !/^check[ -]?out/i.test(title)),

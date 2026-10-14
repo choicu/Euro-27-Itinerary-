@@ -811,3 +811,33 @@ mark { background: var(--chip-bg); color: var(--primary); font-weight: 700; bord
   :root:not([data-theme="light"]) { --nu-bg: #16303f; --nu-text: #e8eef2; --nu-btn-bg: #ffffff; --nu-btn-text: #0c1820; }
 }
 :root[data-theme="dark"] { --nu-bg: #16303f; --nu-text: #e8eef2; --nu-btn-bg: #ffffff; --nu-btn-text: #0c1820; }
+
+/* ---------- Inline expand (Today rows) ---------- */
+.act-title, .act-notes, .leg-title, .leg-time, .leg-notes { display: block; }
+.act-logi { display: flex; }
+.xp-wrap { min-width: 0; }
+.xp-toggle { display: grid; grid-template-columns: 1fr auto; gap: 8px; align-items: start; cursor: pointer; }
+.xp-main { display: block; min-width: 0; }
+.xp-chev { display: grid; place-items: center; width: 24px; height: 24px; color: var(--text-soft); transition: transform 0.2s ease; }
+.xp-chev .ic { width: 18px; height: 18px; }
+.xp-toggle[aria-expanded="true"] .xp-chev { transform: rotate(180deg); }
+.hints { white-space: nowrap; }
+.req-hint {
+  display: inline-flex; align-items: center; gap: 4px; margin-left: 8px; padding: 0 7px;
+  border: 1.5px solid var(--primary); border-radius: 999px; color: var(--primary);
+  font-size: 0.706rem; font-weight: 700; line-height: 1.5; vertical-align: 2px;
+}
+.req-hint .ic { width: 13px; height: 13px; }
+.xp { margin-top: 10px; }
+.xp > .detail-row:first-child { border-top: none; }
+.xp .picker-btn { margin-top: 10px; }
+.req-box { padding: 10px 12px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--primary); }
+.req-box .detail-label { display: flex; align-items: center; gap: 6px; margin-bottom: 6px; color: var(--primary); }
+.req-box .detail-label .ic { width: 15px; height: 15px; }
+.req-lines { list-style: none; margin: 0; padding: 0; }
+.req-line { display: flex; gap: 10px; padding: 6px 0; font-size: 0.882rem; line-height: 1.45; }
+.req-line + .req-line { border-top: 1px solid var(--border); }
+.req-mark { flex: none; display: grid; place-items: center; width: 18px; height: 1.45em; color: var(--primary); }
+.req-mark .ic { width: 17px; height: 17px; }
+.req-text b { font-weight: 700; }
+@media (prefers-reduced-motion: reduce) { .xp-chev { transition: none; } }
