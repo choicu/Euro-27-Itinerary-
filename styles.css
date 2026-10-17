@@ -130,6 +130,16 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 }
 .topbar h1[hidden], .group-chip[hidden] { display: none; }
 
+/* Top-bar clock: phone's local time + Melbourne time */
+.tz-clock {
+  margin: -4px 16px 8px;
+  font-size: 13px;
+  color: var(--text-soft);
+  font-variant-numeric: tabular-nums;
+}
+.tz-clock:empty { display: none; }
+.tz-clock b { font-weight: 600; color: var(--text); }
+
 .day-nav { display: flex; gap: 6px; }
 .day-nav button {
   display: grid;

@@ -1504,4 +1504,27 @@ async function boot() {
   }
 }
 
+/**
+ * Top-bar clock: "Here 9:15 pm · Melbourne 5:15 am Thu". "Here" is the phone's own time zone.
+ * Intl handles daylight saving at both ends. When the phone is on Melbourne time, only Melbourne shows.
+ */
+const MEL_TZ = 'Australia/Melbourne';
+function renderTzClock() {
+  const el = document.getElementById('tz-clock');
+  if (!el) return;
+  const now = new Date();
+  const time = (tz) => now.toLocaleTimeString('en-AU', { hour: 'numeric', minute: '2-digit', ...(tz ? { timeZone: tz } : {}) });
+  const day = (tz) => now.toLocaleDateString('en-AU', { weekday: 'short', ...(tz ? { timeZone: tz } : {}) });
+  const mel = `<b>Melbourne</b> ${time(MEL_TZ)} ${day(MEL_TZ)}`;
+  const sameAsMel = time() === time(MEL_TZ) && day() === day(MEL_TZ);
+  el.innerHTML = sameAsMel ? mel : `<b>Here</b> ${time()} · ${mel}`;
+}
+function startTzClock() {
+  renderTzClock();
+  // Tick on the minute boundary, then every minute; refresh straight away when the app comes back to the foreground.
+  setTimeout(() => { renderTzClock(); setInterval(renderTzClock, 60000); }, 60000 - (Date.now() % 60000));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') renderTzClock(); });
+}
+
+startTzClock();
 boot();
