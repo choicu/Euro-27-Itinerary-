@@ -893,7 +893,7 @@ async function renderWeather(d) {
     const when = new Date(entry.at).toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' });
     const elNow = document.getElementById('wx-line');
     elNow.innerHTML = `${icon(ic)}<span class="wx-main">${escapeHtml(place)} · ${parts.join(' · ')}</span>
-      <span class="wx-src">Forecast ${escapeHtml(when)} · ${extLink('https://open-meteo.com/', 'wx-credit', 'Weather data by Open-Meteo.com')}</span>`;
+      <span class="wx-src">Forecast ${escapeHtml(when)}</span>`;
     elNow.hidden = false;
     return true;
   };
@@ -911,7 +911,7 @@ async function renderWeather(d) {
       : `Last checked ${t.toLocaleString('en-AU', { day: 'numeric', month: 'short', hour: 'numeric', minute: '2-digit' })}`;
     const el2 = document.getElementById('wx-line');
     el2.innerHTML = `${icon(ic)}<span class="wx-main">${escapeHtml(place)} now · <strong>${Math.round(cur.temperature_2m)}°</strong>${label ? ` · ${escapeHtml(label)}` : ''}</span>
-      <span class="wx-src">${escapeHtml(when)}${ahead > WX_DAYS_AHEAD ? ' · Forecast shows a week out' : ''} · ${extLink('https://open-meteo.com/', 'wx-credit', 'Weather data by Open-Meteo.com')}</span>`;
+      <span class="wx-src">${escapeHtml(when)}${ahead > WX_DAYS_AHEAD ? ' · Forecast shows a week out' : ''}</span>`;
     el2.hidden = false;
     return true;
   };
