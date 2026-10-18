@@ -323,25 +323,41 @@ export function parseItinerary(csvText) {
   };
 }
 
+/**
+ * A real itinerary has dated days. Anything else (Google error page, empty reply, wrong tab) is rejected,
+ * and so is a sheet that suddenly has far fewer days than the saved plan (e.g. rows deleted by accident).
+ */
+function checkItinerary(text, minDays = 1) {
+  let days;
+  try { ({ days } = parseItinerary(text)); } catch (_) { throw new Error('not-itinerary'); }
+  const dated = days.filter((d) => d.date).length;
+  if (!dated) throw new Error('not-itinerary');
+  if (dated < minDays) throw new Error(`incomplete:${dated}`);
+}
+
 /** Instant local copy: last saved sheet data, else the bundled snapshot. Never waits on the network for the sheet. */
 export async function loadLocalCSV() {
   try {
     const cached = localStorage.getItem(CACHE_KEY);
     const cachedAt = localStorage.getItem(CACHE_TIME_KEY);
-    if (cached) return { csvText: cached, source: 'cache', fetchedAt: cachedAt };
-  } catch (_) { /* storage may be unavailable */ }
+    if (cached) {
+      checkItinerary(cached); // a bad saved copy (from an older version) falls through to the snapshot
+      return { csvText: cached, source: 'cache', fetchedAt: cachedAt };
+    }
+  } catch (_) { /* storage unavailable, or the saved copy isn't a valid itinerary */ }
   const res = await fetch(SNAPSHOT_URL);
   return { csvText: await res.text(), source: 'snapshot', fetchedAt: null };
 }
 
 /** Live sheet fetch with a timeout so weak signal never hangs the app. Throws on failure. */
-export async function fetchLiveCSV(timeoutMs = 8000) {
+export async function fetchLiveCSV(timeoutMs = 8000, minDays = 1) {
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), timeoutMs);
   try {
     const res = await fetch(CSV_URL, { cache: 'no-store', signal: ctrl.signal });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const text = await res.text();
+    checkItinerary(text, minDays); // throws before anything is saved
     const now = new Date().toISOString();
     try {
       localStorage.setItem(CACHE_KEY, text);

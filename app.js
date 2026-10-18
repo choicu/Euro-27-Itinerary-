@@ -600,6 +600,7 @@ function renderSyncFooter() {
   const when = fetchedAt ? new Date(fetchedAt).toLocaleString('en-AU', { dateStyle: 'medium', timeStyle: 'short' }) : null;
   let text;
   if (refreshing) text = 'Checking sheet for updates…';
+  else if (sheetWarning) text = 'The sheet looks incomplete, so the saved plan is still showing';
   else if (source === 'live') text = `Updated ${when} from sheet`;
   else if (source === 'cache') text = `Offline · showing the plan saved ${when || 'earlier'}`;
   else text = 'Offline · showing an older copy of the plan';
@@ -1239,8 +1240,9 @@ const FX_KEY = 'europe2027_fx_v1';
 const FX_URL = 'https://api.frankfurter.dev/v1/latest?base=AUD&symbols=EUR';
 const FX_MAX_AGE = 6 * 60 * 60 * 1000; // re-check at most every 6 hours (ECB publishes once per weekday)
 let fxLoading = false;
-function loadFx() { try { const v = JSON.parse(localStorage.getItem(FX_KEY)); return v && v.rate > 0 ? v : null; } catch (_) { return null; } }
-function saveFx(v) { try { localStorage.setItem(FX_KEY, JSON.stringify(v)); } catch (_) { /* not fatal */ } }
+let fxMem = null; // used when storage is blocked (e.g. private browsing)
+function loadFx() { try { const v = JSON.parse(localStorage.getItem(FX_KEY)); if (v && v.rate > 0) return v; } catch (_) { /* fall back to memory */ } return fxMem; }
+function saveFx(v) { fxMem = v; try { localStorage.setItem(FX_KEY, JSON.stringify(v)); } catch (_) { /* not fatal */ } }
 
 async function fetchFx() {
   const ctl = new AbortController();
@@ -1500,6 +1502,7 @@ document.getElementById('day-today').addEventListener('click', () => goToDay(tod
 /* ---------------- Data load + refresh ---------------- */
 
 let refreshing = false;
+let sheetWarning = null; // set when the sheet came back with far fewer days than the saved plan
 let lastRefreshAttempt = 0;
 
 let lastCsvText = null;
@@ -1520,7 +1523,9 @@ async function refreshFromSheet() {
   lastRefreshAttempt = Date.now();
   renderSyncFooter();
   try {
-    const live = await fetchLiveCSV();
+    const savedDays = STATE.days.filter((d) => d.date).length;
+    const live = await fetchLiveCSV(8000, Math.max(1, Math.ceil(savedDays * 0.8)));
+    sheetWarning = null;
     if (live.csvText === lastCsvText) {
       // Nothing changed in the sheet: just update the "Updated…" time, no re-render (no flicker/jank).
       STATE.source = live.source;
@@ -1531,8 +1536,9 @@ async function refreshFromSheet() {
       handyKey = null;
       renderCurrentScreen();
     }
-  } catch (_) {
-    /* no/weak signal: keep showing the saved copy */
+  } catch (err) {
+    /* no/weak signal, or the sheet looked wrong: keep showing the saved copy */
+    sheetWarning = String(err && err.message).startsWith('incomplete') ? 'incomplete' : null;
   } finally {
     refreshing = false;
     renderSyncFooter();
@@ -1609,11 +1615,28 @@ function renderTzClock() {
   const sameAsMel = time() === time(MEL_TZ) && day() === day(MEL_TZ);
   el.innerHTML = sameAsMel ? mel : `<b>Here</b> ${time()} · ${mel}`;
 }
+/**
+ * Phones resume home-screen apps instead of reloading them, so after midnight the app could still show
+ * yesterday. When the date changes: move to the new today if you were on the old one, and redraw the
+ * Today highlight, Next up, weather and "You're here".
+ */
+let shownDate = new Date();
+function checkNewDay() {
+  const now = new Date();
+  if (sameDate(now, shownDate) || !STATE.days.length) return;
+  const prevIdx = STATE.days.findIndex((d) => d.date && sameDate(d.date, shownDate));
+  shownDate = now;
+  if (STATE.currentDayIdx === prevIdx || prevIdx === -1) STATE.currentDayIdx = pickInitialDayIndex(STATE.days);
+  stripKey = null;
+  handyKey = null;
+  renderCurrentScreen();
+}
+function clockTick() { renderTzClock(); checkNewDay(); }
 function startTzClock() {
   renderTzClock();
-  // Tick on the minute boundary, then every minute; refresh straight away when the app comes back to the foreground.
-  setTimeout(() => { renderTzClock(); setInterval(renderTzClock, 60000); }, 60000 - (Date.now() % 60000));
-  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') renderTzClock(); });
+  // Tick on the minute boundary, then every minute; check straight away when the app comes back to the foreground.
+  setTimeout(() => { clockTick(); setInterval(clockTick, 60000); }, 60000 - (Date.now() % 60000));
+  document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') clockTick(); });
 }
 
 startTzClock();
