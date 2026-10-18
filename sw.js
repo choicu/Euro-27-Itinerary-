@@ -1,5 +1,5 @@
 // Bump CACHE_VERSION on every app-shell change so phones pick up the update.
-const CACHE_VERSION = 'v30';
+const CACHE_VERSION = 'v31';
 const SHELL_CACHE = `europe2027-shell-${CACHE_VERSION}`;
 
 const SHELL_FILES = [
@@ -16,6 +16,7 @@ const SHELL_FILES = [
   'content/handy.json',
   'icons/icon-192.png',
   'icons/icon-512.png',
+  'icons/apple-touch-icon.png',
 ];
 
 self.addEventListener('install', (event) => {
