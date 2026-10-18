@@ -206,8 +206,6 @@ function finishDayStrip(strip) {
     strip.scrollTo({ left: activeChip.offsetLeft - (strip.clientWidth - activeChip.offsetWidth) / 2 });
   }
   const vis = visibleIdx();
-  document.getElementById('day-prev').disabled = !vis.length || STATE.currentDayIdx === vis[0];
-  document.getElementById('day-next').disabled = !vis.length || STATE.currentDayIdx === vis[vis.length - 1];
   const ti = todayDayIndex();
   document.getElementById('day-today').hidden = ti === -1 || ti === STATE.currentDayIdx;
 }
@@ -603,9 +601,9 @@ function renderSyncFooter() {
   let text;
   if (refreshing) text = 'Checking sheet for updates…';
   else if (source === 'live') text = `Updated ${when} from sheet`;
-  else if (source === 'cache') text = `Offline — showing saved copy from ${when || 'earlier'}`;
-  else text = 'Offline — showing bundled starting copy';
-  el.textContent = refreshing ? text : `${text} · ↻ Tap to refresh`;
+  else if (source === 'cache') text = `Offline · showing the plan saved ${when || 'earlier'}`;
+  else text = 'Offline · showing an older copy of the plan';
+  el.textContent = refreshing ? text : `${text} · ↻ ${source === 'live' ? 'Tap to refresh' : 'Tap to retry'}`;
   el.disabled = refreshing;
 }
 
@@ -617,17 +615,18 @@ function showGroupPicker() {
   const el = document.getElementById('group-picker');
   el.innerHTML = `<div class="picker-card" role="dialog" aria-label="Who are you?">
     ${currentGroup() ? sheetTop('group-close') : ''}
-    <p class="picker-title">Who are you?</p>
-    <p class="picker-sub">We'll show your days of the trip. You only need to pick once.</p>
+    <p class="picker-title" id="picker-title" tabindex="-1">Who are you?</p>
+    <p class="picker-sub">Pick your couple to see your days of the trip. You only need to do this once.</p>
     ${Object.entries(GROUPS).map(([id, g]) => {
       const range = dayRangeLabel(STATE.days.filter((d) => d.date && d.date >= g.from && d.date <= g.to));
       const on = id === groupId ? ' aria-pressed="true"' : '';
       return `<button type="button" class="picker-btn" data-id="${id}"${on}>
-        <span>${escapeHtml(g.label)}</span><span class="picker-range">${range}</span></button>`;
+        <span>${on ? '✓ ' : ''}${escapeHtml(g.label)}</span><span class="picker-range">${range}</span></button>`;
     }).join('')}
   </div>`;
   el.hidden = false;
-  panelOpened('group-close');
+  // First pick: focus the question, not a couple, so nothing looks pre-selected.
+  panelOpened(currentGroup() ? 'group-close' : 'picker-title');
   document.getElementById('group-close')?.addEventListener('click', closeStayPanel);
   el.querySelectorAll('button[data-id]').forEach((btn) => btn.addEventListener('click', () => chooseGroup(btn.dataset.id)));
 }
@@ -743,8 +742,9 @@ function renderToday() {
     const g = currentGroup();
     document.getElementById('day-header').innerHTML = g
       ? `<p class="title">No days to show</p><p class="locations">Couldn't find ${escapeHtml(g.label)}'s dates in the plan yet.</p>`
-      : `<p class="title">Who are you?</p><p class="locations">Tap the button at the top to pick your days.</p>`;
+      : '<button type="button" class="picker-btn alt" id="pick-days"><span>Pick your days</span></button>';
     document.getElementById('timeline').innerHTML = '';
+    document.getElementById('pick-days')?.addEventListener('click', showGroupPicker);
     return;
   }
   const d = STATE.days[STATE.currentDayIdx];
@@ -1048,9 +1048,9 @@ function maybeShowInstallTip() {
   const el = document.getElementById('install-tip');
   const steps = isIOS()
     ? `<ol class="tip-steps">
-         <li>Tap the <strong>Share</strong> button ${icon('share')} in your browser's toolbar</li>
+         <li>Tap <strong>⋯</strong> next to the address bar, then <strong>Share</strong> ${icon('share')} (older iPhones: the Share button in the toolbar)</li>
          <li>Scroll down and tap <strong>Add to Home Screen</strong></li>
-         <li>Tap <strong>Add</strong></li>
+         <li>Leave <strong>Open as Web App</strong> on, then tap <strong>Add</strong></li>
        </ol>`
     : deferredInstall
       ? ''
@@ -1309,7 +1309,7 @@ function renderFx(status) {
     note.textContent = status === 'failed' ? 'Couldn\'t reach the rate service. Open Handy once with signal to save a rate for offline use.' : '';
     return;
   }
-  rateEl.innerHTML = `<b>€1 = A$${fmtNum(1 / fx.rate, 4)}</b> · A$1 = €${fmtNum(fx.rate, 4)}`;
+  rateEl.innerHTML = `<b class="fx-pair">€1 = A$${fmtNum(1 / fx.rate, 4)}</b> · <span class="fx-pair">A$1 = €${fmtNum(fx.rate, 4)}</span>`;
   const day = new Date(`${fx.date}T12:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
   note.innerHTML = `ECB reference rate for ${escapeHtml(day)}${status === 'failed' ? ' (saved; couldn\'t refresh)' : ''}. Your card or bank rate will be a bit worse, plus any fees.`;
   // Re-run the converter against the newest rate.
@@ -1324,7 +1324,7 @@ function renderHandy() {
   if (key === handyKey) return; // already rendered for this country
   handyKey = key;
   if (!HANDY) {
-    el.innerHTML = '<section class="handy-section fx-section" id="fx-card"></section><p class="muted-note">Handy Info couldn\'t be loaded.</p>';
+    el.innerHTML = '<section class="handy-section fx-section" id="fx-card"></section><p class="muted-note">Handy info couldn\'t be loaded.</p>';
     renderFx();
     return;
   }
@@ -1495,8 +1495,6 @@ document.querySelectorAll('.bottom-nav button').forEach((btn) => {
   });
 });
 
-document.getElementById('day-prev').addEventListener('click', () => stepDay(-1));
-document.getElementById('day-next').addEventListener('click', () => stepDay(1));
 document.getElementById('day-today').addEventListener('click', () => goToDay(todayDayIndex()));
 
 /* ---------------- Data load + refresh ---------------- */

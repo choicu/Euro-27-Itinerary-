@@ -24,9 +24,7 @@
       <h1 id="topbar-title">Europe 2027</h1>
       <button type="button" id="group-chip" class="group-chip" hidden></button>
       <div class="day-nav" id="day-nav">
-        <button id="day-prev" aria-label="Previous day"><svg class="ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m15 18-6-6 6-6"/></svg></button>
         <button id="day-today" class="today-btn" hidden>Today</button>
-        <button id="day-next" aria-label="Next day"><svg class="ic" viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><path d="m9 18 6-6-6-6"/></svg></button>
       </div>
     </div>
     <p class="tz-clock" id="tz-clock"></p>
@@ -61,7 +59,7 @@
 
   <button class="sync-footer" id="sync-footer" type="button">Loading…</button>
 
-  <div id="install-tip" class="install-tip" role="dialog" aria-label="Add this guide to your home screen" hidden></div>
+  <div id="install-tip" class="install-tip" role="region" aria-live="polite" aria-label="Add this guide to your home screen" hidden></div>
 
   <div id="group-picker" class="group-picker" hidden></div>
 

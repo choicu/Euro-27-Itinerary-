@@ -123,7 +123,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 }
 .topbar h1 {
   font-family: var(--font-display);
-  font-size: 19px;
+  font-size: min(1.118rem, 26px);
   font-weight: 700;
   letter-spacing: 0.01em;
   color: var(--primary);
@@ -133,7 +133,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 /* Top-bar clock: phone's local time + Melbourne time */
 .tz-clock {
   margin: -4px 16px 8px;
-  font-size: 13px;
+  font-size: min(0.765rem, 18px);
   color: var(--text-soft);
   font-variant-numeric: tabular-nums;
 }
@@ -154,7 +154,7 @@ button { font-family: inherit; color: inherit; cursor: pointer; }
 .day-nav button:disabled { opacity: 0.3; cursor: default; }
 .day-nav .today-btn {
   padding: 0 14px;
-  font-size: 15px;
+  font-size: min(0.882rem, 20px);
   font-weight: 700;
   background: var(--today);
   border-color: var(--today);
@@ -190,9 +190,9 @@ body:not(.on-today) .day-strip { display: none; }
   color: var(--text);
   line-height: 1.1;
 }
-.day-chip .dt { font-size: 12px; color: var(--text-soft); }
-.day-chip .n { font-family: var(--font-display); font-size: 24px; font-weight: 700; margin: 1px 0; }
-.day-chip .loc { font-size: 11px; color: var(--text-soft); white-space: nowrap; max-width: 76px; overflow: hidden; text-overflow: ellipsis; }
+.day-chip .dt { font-size: min(0.706rem, 15px); color: var(--text-soft); }
+.day-chip .n { font-family: var(--font-display); font-size: min(1.412rem, 30px); font-weight: 700; margin: 1px 0; }
+.day-chip .loc { font-size: min(0.647rem, 14px); color: var(--text-soft); white-space: nowrap; max-width: 76px; overflow: hidden; text-overflow: ellipsis; }
 .day-chip.active { background: var(--primary); border-color: var(--primary); color: var(--on-fill); }
 .day-chip.active .dt, .day-chip.active .loc { color: var(--on-fill); opacity: 0.85; }
 .day-chip.is-today::after {
@@ -221,8 +221,8 @@ body:not(.on-today) .day-strip { display: none; }
   text-align: left;
   line-height: 1.2;
 }
-.group-chip .gc-name { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
-.group-chip .gc-range { display: flex; align-items: center; gap: 2px; font-size: 12px; color: var(--text-soft); }
+.group-chip .gc-name { display: flex; align-items: center; gap: 6px; font-weight: 700; font-size: min(0.824rem, 18px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%; }
+.group-chip .gc-range { display: flex; align-items: center; gap: 2px; font-size: min(0.706rem, 15px); color: var(--text-soft); }
 .group-chip .ic { width: 16px; height: 16px; }
 
 /* ---------- Countdown ---------- */
@@ -483,6 +483,7 @@ body:not(.on-today) .day-strip { display: none; }
 /* Money card: AUD/EUR rate + two-way converter */
 .fx-section { margin-top: 8px; }
 .fx-rate b { color: var(--primary); }
+.fx-pair { white-space: nowrap; }
 .fx-conv { display: flex; align-items: center; gap: 8px; margin: 10px 0 8px; }
 .fx-field {
   flex: 1 1 0;
@@ -504,7 +505,7 @@ body:not(.on-today) .day-strip { display: none; }
   background: transparent;
   color: var(--text);
   font: inherit;
-  font-size: 16px; /* 16px stops iPhone zooming in on focus */
+  font-size: max(16px, 0.941rem); /* never under 16px: stops iPhone zooming in on focus */
   font-variant-numeric: tabular-nums;
   outline: none;
 }
@@ -590,7 +591,7 @@ body:not(.on-today) .day-strip { display: none; }
   text-decoration: none;
 }
 .picker-btn.alt { background: var(--route-bg); color: var(--primary); }
-.picker-btn[aria-pressed="true"] { box-shadow: 0 0 0 3px var(--today); }
+.picker-btn[aria-pressed="true"] { box-shadow: 0 0 0 2px var(--surface), 0 0 0 5px var(--link); }
 .picker-range { font-size: 0.824rem; font-weight: 600; opacity: 0.85; }
 .picker-skip {
   display: block;
@@ -634,7 +635,7 @@ body:not(.on-today) .day-strip { display: none; }
   padding: 4px 0;
   border: none;
   background: none;
-  font-size: 12px;
+  font-size: min(0.706rem, 14px); /* capped so five labels always fit */
   color: var(--text-soft);
 }
 .bottom-nav button .ic { width: 22px; height: 22px; }
@@ -798,6 +799,7 @@ mark { background: var(--chip-bg); color: var(--primary); font-weight: 700; bord
 }
 .sheet-close .ic { width: 22px; height: 22px; padding: 3px; border-radius: 50%; background: var(--route-bg); box-sizing: content-box; }
 .sheet-top + .picker-title { padding-right: 40px; }
+.picker-title:focus { outline: none; }
 /* Long place names in the detail panel stay compact */
 .detail-card .picker-title { font-size: min(1.294rem, 35px); }
 /* Panels follow the finger when swiped down */
