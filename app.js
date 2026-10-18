@@ -1231,6 +1231,93 @@ function rankEmergency(e, country) {
   return 2;
 }
 
+/**
+ * Currency card (top of Handy): AUD/EUR ECB reference rate via Frankfurter (free, no key),
+ * cached for offline use, with a two-way converter. Every country on the trip uses the euro.
+ */
+const FX_KEY = 'europe2027_fx_v1';
+const FX_URL = 'https://api.frankfurter.dev/v1/latest?base=AUD&symbols=EUR';
+const FX_MAX_AGE = 6 * 60 * 60 * 1000; // re-check at most every 6 hours (ECB publishes once per weekday)
+let fxLoading = false;
+function loadFx() { try { const v = JSON.parse(localStorage.getItem(FX_KEY)); return v && v.rate > 0 ? v : null; } catch (_) { return null; } }
+function saveFx(v) { try { localStorage.setItem(FX_KEY, JSON.stringify(v)); } catch (_) { /* not fatal */ } }
+
+async function fetchFx() {
+  const ctl = new AbortController();
+  const t = setTimeout(() => ctl.abort(), 8000);
+  try {
+    const r = await fetch(FX_URL, { signal: ctl.signal, referrerPolicy: 'no-referrer' });
+    if (!r.ok) return null;
+    const j = await r.json();
+    const rate = j && j.rates && Number(j.rates.EUR);
+    if (!(rate > 0) || !j.date) return null;
+    const v = { rate, date: j.date, at: Date.now() };
+    saveFx(v);
+    return v;
+  } catch (_) { return null; } finally { clearTimeout(t); }
+}
+
+/** Fetch a fresh rate if the cached one is stale, then redraw. Called whenever Handy is shown. */
+async function refreshFx() {
+  const cached = loadFx();
+  if (fxLoading || (cached && Date.now() - cached.at < FX_MAX_AGE)) return;
+  fxLoading = true;
+  const fresh = await fetchFx();
+  fxLoading = false;
+  renderFx(fresh ? 'ok' : 'failed');
+}
+
+const fmtNum = (n, dp) => n.toLocaleString('en-AU', { minimumFractionDigits: dp, maximumFractionDigits: dp });
+const parseAmt = (v) => { const n = parseFloat(String(v).replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? n : null; };
+
+/** Draws the card once, then only updates the rate text so typing in the converter is never interrupted. */
+function renderFx(status) {
+  const el = document.getElementById('fx-card');
+  if (!el) return;
+  const fx = loadFx();
+  if (!el.dataset.ready) {
+    el.dataset.ready = '1';
+    el.innerHTML = `
+      <h2>${icon('card')}Money</h2>
+      <div class="handy-item">
+        <div class="handy-label">Exchange rate</div>
+        <div class="handy-value fx-rate" id="fx-rate"></div>
+        <div class="fx-conv">
+          <label class="fx-field"><span>€</span><input id="fx-eur" type="text" inputmode="decimal" autocomplete="off" placeholder="EUR" aria-label="Amount in euros"></label>
+          <span class="fx-eq" aria-hidden="true">=</span>
+          <label class="fx-field"><span>A$</span><input id="fx-aud" type="text" inputmode="decimal" autocomplete="off" placeholder="AUD" aria-label="Amount in Australian dollars"></label>
+        </div>
+        <div class="handy-notes" id="fx-note"></div>
+      </div>`;
+    const eur = document.getElementById('fx-eur');
+    const aud = document.getElementById('fx-aud');
+    eur.addEventListener('input', () => {
+      const f = loadFx(); const n = parseAmt(eur.value);
+      aud.value = f && n !== null ? fmtNum(n / f.rate, 2) : '';
+    });
+    aud.addEventListener('input', () => {
+      const f = loadFx(); const n = parseAmt(aud.value);
+      eur.value = f && n !== null ? fmtNum(n * f.rate, 2) : '';
+    });
+  }
+  const rateEl = document.getElementById('fx-rate');
+  const note = document.getElementById('fx-note');
+  const inputs = [document.getElementById('fx-eur'), document.getElementById('fx-aud')];
+  inputs.forEach((i) => { i.disabled = !fx; });
+  if (!fx) {
+    rateEl.textContent = status === 'failed' ? 'Rate unavailable' : 'Loading rate…';
+    note.textContent = status === 'failed' ? 'Couldn\'t reach the rate service. Open Handy once with signal to save a rate for offline use.' : '';
+    return;
+  }
+  rateEl.innerHTML = `<b>€1 = A$${fmtNum(1 / fx.rate, 4)}</b> · A$1 = €${fmtNum(fx.rate, 4)}`;
+  const day = new Date(`${fx.date}T12:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
+  note.innerHTML = `ECB reference rate for ${escapeHtml(day)}${status === 'failed' ? ' (saved; couldn\'t refresh)' : ''}. Your card or bank rate will be a bit worse, plus any fees. `
+    + extLink('https://frankfurter.dev/', 'source-link', 'Rates by Frankfurter');
+  // Re-run the converter against the newest rate.
+  const eur = inputs[0];
+  if (eur.value) eur.dispatchEvent(new Event('input'));
+}
+
 let handyKey = null;
 function renderHandy() {
   const el = document.getElementById('handy-list');
@@ -1238,7 +1325,8 @@ function renderHandy() {
   if (key === handyKey) return; // already rendered for this country
   handyKey = key;
   if (!HANDY) {
-    el.innerHTML = '<p class="muted-note">Handy Info couldn\'t be loaded.</p>';
+    el.innerHTML = '<section class="handy-section fx-section" id="fx-card"></section><p class="muted-note">Handy Info couldn\'t be loaded.</p>';
+    renderFx();
     return;
   }
 
@@ -1249,6 +1337,8 @@ function renderHandy() {
     : HANDY.emergency;
   const countries = Object.entries(HANDY.countries)
     .sort(([a], [b]) => (a === here ? -1 : b === here ? 1 : 0));
+
+  const fxHtml = '<section class="handy-section fx-section" id="fx-card"></section>';
 
   const emergencyHtml = `
     <section class="handy-section">
@@ -1322,7 +1412,8 @@ function renderHandy() {
     </section>
   `;
 
-  el.innerHTML = emergencyHtml + countryHtml + transportHtml + tomorrowlandHtml + weatherHtml;
+  el.innerHTML = fxHtml + emergencyHtml + countryHtml + transportHtml + tomorrowlandHtml + weatherHtml;
+  renderFx();
 }
 
 /* ---------------- Navigation ---------------- */
@@ -1393,7 +1484,7 @@ function renderCurrentScreen() {
   if (currentScreen === 'today') renderToday();
   if (currentScreen === 'overview') renderOverview();
   if (currentScreen === 'places') { renderPlacesFilter(); renderPlacesList(); }
-  if (currentScreen === 'handy') renderHandy();
+  if (currentScreen === 'handy') { renderHandy(); refreshFx(); }
   if (currentScreen === 'search') renderSearch();
 }
 
@@ -1484,6 +1575,8 @@ async function boot() {
     const res = await fetch('content/handy.json');
     HANDY = await res.json();
   } catch (_) { HANDY = null; }
+  // If the app was opened straight onto Handy, it drew before this loaded: redraw now.
+  if (currentScreen === 'handy') renderHandy();
 
   if ('serviceWorker' in navigator) {
     // After a site update, reload once so the new version is used straight away.

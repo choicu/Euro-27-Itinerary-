@@ -479,6 +479,38 @@ body:not(.on-today) .day-strip { display: none; }
 .handy-value { font-size: 0.882rem; line-height: 1.45; }
 .handy-value.link { display: inline-block; padding: 4px 0; font-weight: 700; text-decoration: none; color: var(--link); }
 .handy-notes { font-size: 0.824rem; color: var(--text-soft); }
+
+/* Money card: AUD/EUR rate + two-way converter */
+.fx-section { margin-top: 8px; }
+.fx-rate b { color: var(--primary); }
+.fx-conv { display: flex; align-items: center; gap: 8px; margin: 10px 0 8px; }
+.fx-field {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 44px;
+  padding: 0 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface);
+}
+.fx-field span { font-weight: 700; color: var(--text-soft); }
+.fx-field input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 16px; /* 16px stops iPhone zooming in on focus */
+  font-variant-numeric: tabular-nums;
+  outline: none;
+}
+.fx-field:focus-within { border-color: var(--link); }
+.fx-field input:disabled { opacity: 0.5; }
+.fx-eq { color: var(--text-soft); font-weight: 700; }
 .source-link { display: inline-block; padding: 10px 0 6px; font-size: 0.706rem; color: var(--text-soft); }
 .tel-link {
   /* Inline in sentences; extra padding (cancelled by negative margin) makes a 44px-tall
