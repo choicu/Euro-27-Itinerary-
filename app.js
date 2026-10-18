@@ -1311,8 +1311,7 @@ function renderFx(status) {
   }
   rateEl.innerHTML = `<b>€1 = A$${fmtNum(1 / fx.rate, 4)}</b> · A$1 = €${fmtNum(fx.rate, 4)}`;
   const day = new Date(`${fx.date}T12:00:00`).toLocaleDateString('en-AU', { day: 'numeric', month: 'short', year: 'numeric' });
-  note.innerHTML = `ECB reference rate for ${escapeHtml(day)}${status === 'failed' ? ' (saved; couldn\'t refresh)' : ''}. Your card or bank rate will be a bit worse, plus any fees. `
-    + extLink('https://frankfurter.dev/', 'source-link', 'Rates by Frankfurter');
+  note.innerHTML = `ECB reference rate for ${escapeHtml(day)}${status === 'failed' ? ' (saved; couldn\'t refresh)' : ''}. Your card or bank rate will be a bit worse, plus any fees.`;
   // Re-run the converter against the newest rate.
   const eur = inputs[0];
   if (eur.value) eur.dispatchEvent(new Event('input'));
