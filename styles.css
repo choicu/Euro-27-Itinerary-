@@ -885,3 +885,10 @@ mark { background: var(--chip-bg); color: var(--primary); font-weight: 700; bord
 .req-mark .ic { width: 17px; height: 17px; }
 .req-text b { font-weight: 700; }
 @media (prefers-reduced-motion: reduce) { .xp-chev { transition: none; } }
+/* "In Itinerary" day badge on Places: terracotta, used for nothing else */
+:root { --itin: #9c4221; --itin-bg: #f8e9e2; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --itin: #f0a98a; --itin-bg: #3a2219; }
+}
+:root[data-theme="dark"] { --itin: #f0a98a; --itin-bg: #3a2219; }
+.itin-hint { background: var(--itin-bg); color: var(--itin); }

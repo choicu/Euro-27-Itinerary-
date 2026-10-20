@@ -240,6 +240,7 @@ export function parseItinerary(csvText) {
       address: findHeaderIndex(placesHeaderRow, (h) => h.startsWith('Address')),
       notes: findHeaderIndex(placesHeaderRow, (h) => h === 'Notes'),
       hours: findHeaderIndex(placesHeaderRow, (h) => h === 'Hours'),
+      inItinerary: findHeaderIndex(placesHeaderRow, (h) => h === 'In Itinerary'), // optional, e.g. "Day 2"
       // Budget Estimate deliberately not read — never rendered (hard rule).
     };
     const placeRows = rows.slice(markerIdx + 2);
@@ -266,6 +267,7 @@ export function parseItinerary(csvText) {
         addressLabel: addr || null,
         notes: get(pcol.notes) || null,
         hours: get(pcol.hours) || null,
+        inItinerary: get(pcol.inItinerary) || null,
         url,
       });
     }

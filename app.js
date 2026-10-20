@@ -1002,7 +1002,7 @@ function renderPlacesList() {
   list.innerHTML = `<ul class="place-list">${items.map((p) => `
     <li class="place-card">
       <button type="button" class="place-body" data-place="${STATE.places.indexOf(p)}">
-        <p class="name">${escapeHtml(p.name)}${p.hours ? `<span class="hours-hint">${icon('clock')}Hours</span>` : ''}</p>
+        <p class="name">${escapeHtml(p.name)}${p.inItinerary ? `<span class="hours-hint itin-hint">${icon('calendar')}${escapeHtml(p.inItinerary)}</span>` : ''}${p.hours ? `<span class="hours-hint">${icon('clock')}Hours</span>` : ''}</p>
         <p class="meta">${[p.category, p.area].filter(Boolean).map(escapeHtml).join(' in ')}</p>
         ${p.notes ? `<p class="notes">${escapeHtml(p.notes)}</p>` : ''}
       </button>
