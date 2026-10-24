@@ -114,7 +114,9 @@ export function parseItinerary(csvText) {
   const header = rows[headerRowIdx];
 
   const col = {
-    dayNum: 0, // column A, unlabelled, always first
+    // Optional legacy column A (unlabelled day number). Day numbers now come from the "Day N"
+    // labels in the Day column, so column A can be deleted from the sheet.
+    dayNum: norm(header[0]) === '' ? 0 : -1,
     dayLabel: findHeaderIndex(header, (h) => h === 'Day'),
     date: findHeaderIndex(header, (h) => h === 'Date'),
     location: findHeaderIndex(header, (h) => h === 'Location'),
@@ -135,8 +137,11 @@ export function parseItinerary(csvText) {
     }
   }
 
-  const markerIdx = rows.findIndex((r) => norm(r[0]) === 'PLACES TO TRY');
-  const itinEnd = markerIdx === -1 ? rows.length : markerIdx;
+  // The Places to Try table is found by its own header row ("Name of Place"), not by the
+  // "PLACES TO TRY" marker, which lived in column A and disappears if that column is deleted.
+  const placesHdrIdx = rows.findIndex((r, i) => i > headerRowIdx && r.some((c) => norm(c) === 'Name of Place'));
+  const markerBefore = placesHdrIdx > 0 && rows[placesHdrIdx - 1].some((c) => norm(c) === 'PLACES TO TRY');
+  const itinEnd = placesHdrIdx === -1 ? rows.length : placesHdrIdx - (markerBefore ? 1 : 0);
 
   const dataRows = rows.slice(headerRowIdx + 1, itinEnd);
 
@@ -148,10 +153,16 @@ export function parseItinerary(csvText) {
   for (const r of dataRows) {
     const get = (idx) => (idx >= 0 && idx < r.length ? norm(r[idx]) : '');
 
-    let dayNumRaw = get(col.dayNum);
-    let dayNum = dayNumRaw ? parseInt(dayNumRaw, 10) : null;
+    // Day number: the "Day N" label on the first row of each day; else legacy column A if
+    // present; else inherit from the previous row (the rest of that day's rows).
+    const labelMatch = /^Day (\d+)$/.exec(get(col.dayLabel));
+    let dayNum = labelMatch ? parseInt(labelMatch[1], 10) : null;
+    if (dayNum === null && col.dayNum >= 0) {
+      const dayNumRaw = get(col.dayNum);
+      dayNum = dayNumRaw ? parseInt(dayNumRaw, 10) : null;
+    }
     if (dayNum === null || Number.isNaN(dayNum)) {
-      dayNum = currentDay; // inherit (blank day-number rows, e.g. trailing rows of a day)
+      dayNum = currentDay;
     }
     if (dayNum === null) { unplaced.push(r); continue; }
     currentDay = dayNum;
@@ -227,8 +238,8 @@ export function parseItinerary(csvText) {
 
   // Places to Try
   const places = [];
-  if (markerIdx !== -1) {
-    const placesHeaderRow = rows[markerIdx + 1] || [];
+  if (placesHdrIdx !== -1) {
+    const placesHeaderRow = rows[placesHdrIdx] || [];
     const pcol = {
       country: findHeaderIndex(placesHeaderRow, (h) => h === 'Country'),
       city: findHeaderIndex(placesHeaderRow, (h) => h === 'City'),
@@ -243,7 +254,7 @@ export function parseItinerary(csvText) {
       inItinerary: findHeaderIndex(placesHeaderRow, (h) => h === 'In Itinerary'), // optional, e.g. "Day 2"
       // Budget Estimate deliberately not read — never rendered (hard rule).
     };
-    const placeRows = rows.slice(markerIdx + 2);
+    const placeRows = rows.slice(placesHdrIdx + 1);
     for (const r of placeRows) {
       const get = (idx) => (idx >= 0 && idx < r.length ? norm(r[idx]) : '');
       const name = get(pcol.name);
