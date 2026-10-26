@@ -892,3 +892,12 @@ mark { background: var(--chip-bg); color: var(--primary); font-weight: 700; bord
 }
 :root[data-theme="dark"] { --itin: #f0a98a; --itin-bg: #3a2219; }
 .itin-hint { background: var(--itin-bg); color: var(--itin); }
+
+/* ---------- Load failure (no plan available at all) ---------- */
+.load-failed .bottom-nav, .load-failed .day-strip { display: none; }
+.load-error { margin: 40px auto 0; max-width: 420px; padding: 24px 20px; border: 1px solid var(--border); border-radius: 18px; background: var(--surface); text-align: center; }
+.le-ic { display: inline-grid; place-items: center; width: 52px; height: 52px; margin-bottom: 12px; border-radius: 50%; background: var(--route-bg); color: var(--primary); }
+.le-ic .ic, .le-ic svg { width: 26px; height: 26px; }
+.le-title { font-family: var(--font-display); font-size: min(1.412rem, 38px); font-weight: 700; line-height: 1.15; color: var(--primary); }
+.le-sub { margin: 8px 0 20px; font-size: 0.941rem; line-height: 1.45; color: var(--text-soft); }
+.load-error .picker-btn { justify-content: center; margin-bottom: 0; }

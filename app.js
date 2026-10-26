@@ -1556,23 +1556,50 @@ document.addEventListener('visibilitychange', () => {
 
 /* ---------------- Boot ---------------- */
 
+/**
+ * Shown only when no plan could be loaded at all: no saved copy, no bundled copy, and the sheet
+ * couldn't be reached or read (e.g. very first open with no signal). Retry reloads the page.
+ */
+function showLoadError(offline) {
+  document.body.classList.add('load-failed');
+  for (const id of ['day-strip', 'countdown-banner', 'timeline']) document.getElementById(id).innerHTML = '';
+  document.getElementById('day-header').innerHTML = `<div class="load-error" role="alert">
+    <span class="le-ic">${icon('alert')}</span>
+    <p class="le-title">Couldn't load the trip plan</p>
+    <p class="le-sub">${offline
+      ? 'The first time you open this guide it needs signal. Connect to Wi-Fi or mobile data, then tap Retry. After that it works offline.'
+      : 'The plan couldn\'t be loaded just now. Check your signal and tap Retry. If it keeps happening, let Jason know.'}</p>
+    <button type="button" class="picker-btn" id="load-retry"><span>Retry</span></button>
+  </div>`;
+  document.getElementById('load-retry').addEventListener('click', () => window.location.reload());
+}
+
 async function boot() {
   document.body.classList.add('on-today');
   document.body.classList.remove('ready');
   // 1. Show the saved copy instantly (works with no signal).
-  applyData(await loadLocalCSV());
-  const startHash = location.hash;
-  const linked = dayIdxFromHash(startHash);
-  if (linked !== -1) STATE.currentDayIdx = linked;
-  renderToday();
-  if (HASH_SCREEN[startHash.slice(1)]) applyHash(startHash);
-  renderSyncFooter();
-  document.body.classList.add('ready');
-  if (isFriendsMode() && !currentGroup()) showGroupPicker();
-  else setTimeout(maybeShowInstallTip, 1500);
+  //    If there's no usable saved copy or bundled plan, try the sheet directly before giving up.
+  let source = null;
+  try { applyData(await loadLocalCSV()); source = 'local'; } catch (_) { /* fall through to the sheet */ }
+  if (!source) {
+    try { applyData(await fetchLiveCSV()); source = 'live'; } catch (_) { /* nothing worked */ }
+  }
+  if (!source) {
+    showLoadError(navigator.onLine === false);
+  } else {
+    const startHash = location.hash;
+    const linked = dayIdxFromHash(startHash);
+    if (linked !== -1) STATE.currentDayIdx = linked;
+    renderToday();
+    if (HASH_SCREEN[startHash.slice(1)]) applyHash(startHash);
+    renderSyncFooter();
+    document.body.classList.add('ready');
+    if (isFriendsMode() && !currentGroup()) showGroupPicker();
+    else setTimeout(maybeShowInstallTip, 1500);
 
-  // 2. Then check the sheet in the background (8s timeout).
-  refreshFromSheet();
+    // 2. Then check the sheet in the background (8s timeout). Skipped if it was just fetched.
+    if (source === 'local') refreshFromSheet();
+  }
 
   try {
     const res = await fetch('content/handy.json');
