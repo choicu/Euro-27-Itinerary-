@@ -390,9 +390,12 @@ function reqHint(card) {
   return card.requirements ? `<span class="req-hint">${icon('ticket')}Need to know</span>` : '';
 }
 
+/* Notes longer than this are cut to 3 lines until the row is tapped (CSS does the cutting). */
+const NOTE_CLAMP_CHARS = 150;
+
 /** Does a row have anything to show when expanded? */
 function hasMore(card) {
-  return Boolean(card.requirements || card.hours || card.address || card.hasLink);
+  return Boolean(card.requirements || card.hours || card.address || card.hasLink || (card.notes || '').length > NOTE_CLAMP_CHARS);
 }
 
 /* Known requirement labels → the app's own line icons (unknown labels keep the sheet's emoji). */
@@ -447,7 +450,7 @@ function expandHtml(card, id) {
 function bodyHtml(card, cls, parts) {
   const id = ref(card);
   const desc = parts.extra.map((x, i) => x.replace('<span ', `<span id="d${id}-${i}" `)).join('');
-  const title = `<span class="${parts.titleCls}" id="t${id}">${escapeHtml(card.title)}<span class="sr">. </span><span class="hints">${reqHint(card)}${hoursHint(card)}</span></span>`;
+  const title = `<span class="${parts.titleCls}" id="t${id}">${escapeHtml(card.title)}<span class="sr">.</span> <span class="hints">${reqHint(card)}${hoursHint(card)}</span></span>`;
   if (!hasMore(card)) return `<div class="${cls}" data-card="${id}">${title}${desc}</div>`;
   const ids = parts.extra.map((_, i) => `d${id}-${i}`).join(' ');
   return `<div class="xp-wrap">
@@ -519,11 +522,43 @@ function renderTimeline(d) {
   timeline.innerHTML = order
     .filter((slot) => d.slots[slot].length > 0)
     .map((slot) => `
-      <section class="slot-section">
-        <h3 class="slot-title">${slot === 'Plans' ? 'Any time' : slot}</h3>
+      <section class="slot-section" data-slot="${slot}">
+        <h3 class="slot-title"><span>${slot === 'Plans' ? 'Any time' : slot}</span></h3>
         <ul class="acts">${slotHtml(d.slots[slot])}</ul>
       </section>
-    `).join('');
+    `).join('') + dayPlacesHtml(d);
+  markNowSlot();
+}
+
+/** Places to try in the day's towns: one button per town that has any, opening Places filtered to it. */
+function dayPlacesHtml(d) {
+  const btns = d.locations.map((loc) => {
+    const n = STATE.places.filter((p) => p.area === loc).length;
+    return n ? `<button type="button" class="picker-btn alt day-places" data-area="${escapeHtml(loc)}">
+      <span>${icon('pin')}Places to try in ${escapeHtml(loc)}</span><span class="picker-range">${n}${icon('chevRight')}</span></button>` : '';
+  }).join('');
+  return btns ? `<div class="day-places-wrap">${btns}</div>` : '';
+}
+
+/** Part of the day by the phone's clock: before noon, noon to 5pm, 5pm on. */
+function nowSlot() {
+  const h = new Date().getHours();
+  return h < 12 ? 'Morning' : h < 17 ? 'Afternoon' : 'Evening';
+}
+/** On the actual day, tag the current part of the day "Now". Cheap: only toggles a class. */
+function markNowSlot() {
+  const isToday = STATE.currentDayIdx === todayDayIndex();
+  const slot = nowSlot();
+  document.querySelectorAll('#timeline .slot-section').forEach((s) => {
+    s.classList.toggle('is-now', isToday && s.dataset.slot === slot);
+  });
+}
+/** Opening the app on the day: start at the current part of the day, unless travel is still to do (Next up stays in view). */
+function scrollToNowSlot() {
+  if (currentScreen !== 'today' || STATE.currentDayIdx !== todayDayIndex()) return;
+  if (document.querySelector('#next-up .nu-done')) return;
+  const s = document.querySelector('#timeline .slot-section.is-now');
+  if (s && s.previousElementSibling) s.scrollIntoView({ block: 'start' });
 }
 
 /** Expand / collapse a timeline row in place. Several can be open at once. */
@@ -538,6 +573,8 @@ function setExpanded(btn, open) {
 document.getElementById('timeline').addEventListener('click', async (e) => {
   const toggle = e.target.closest('.xp-toggle');
   if (toggle) { setExpanded(toggle, toggle.getAttribute('aria-expanded') !== 'true'); return; }
+  const dp = e.target.closest('.day-places');
+  if (dp) { openPlacesFor(dp.dataset.area); return; }
   const copy = e.target.closest('.xp-copy');
   if (!copy) return;
   const addrEl = copy.closest('.xp').querySelector('.xp-addr');
@@ -955,11 +992,18 @@ function renderOverview() {
     const first = b.days[0], last = b.days[b.days.length - 1];
     const n = b.days.length;
     const isNow = todayDay != null && b.days.some((d) => d.day === todayDay);
-    return `<li class="stop${isNow ? ' is-now' : ''}">
+    const isPast = todayDay != null && last.day < todayDay;
+    // How you get there: the main travel leg on the day you arrive (flight > ferry > train > car).
+    const modes = dayLegs(first).map((c) => c.mode);
+    const mode = ['plane', 'ferry', 'train', 'car'].find((m) => modes.includes(m));
+    // Where you sleep: each stay named in the sheet for these days, in order.
+    const stays = [...new Set(b.days.map((d) => d.stay && d.stay.name).filter(Boolean))];
+    return `<li class="stop${isNow ? ' is-now' : ''}${isPast ? ' is-past' : ''}">
       <button type="button" class="stop-btn" data-start="${b.startDay}">
-        <span class="stop-dot"></span>
+        <span class="stop-dot${mode ? ' has-mode' : ''}">${mode ? icon(mode) : ''}</span>
         <span class="stop-body">
           <span class="stop-place">${escapeHtml(b.key)}</span>
+          ${stays.length ? `<span class="stop-stay">${icon('bed')}<span>${stays.map(escapeHtml).join(', ')}</span></span>` : ''}
           <span class="stop-when"><strong>${escapeHtml(shortRange(first.date, last.date))}</strong><span class="stop-days">Day ${first.day === last.day ? first.day : `${first.day}–${last.day}`}, ${n} day${n === 1 ? '' : 's'}</span></span>
         </span>
         ${isNow ? '<span class="now-tag">Today</span>' : icon('chevRight')}
@@ -978,6 +1022,21 @@ function renderOverview() {
 /* ---------------- Rendering: Places screen ---------------- */
 
 let placesFilter = 'All';
+let placesFilterPicked = false; // true once the person taps a filter (then we stop following today's town)
+
+/** During the trip, Places opens on today's town (if it has any places) until a filter is picked. */
+function followTodayInPlaces() {
+  if (placesFilterPicked) return;
+  const ti = todayDayIndex();
+  const loc = ti === -1 ? null : (STATE.days[ti].endLocation || null);
+  placesFilter = loc && STATE.places.some((p) => p.area === loc) ? loc : 'All';
+}
+function openPlacesFor(area) {
+  placesFilter = area;
+  placesFilterPicked = true;
+  showScreen('places');
+  renderCurrentScreen();
+}
 
 function renderPlacesFilter() {
   const cities = Array.from(new Set(STATE.places.map((p) => p.area).filter(Boolean)));
@@ -986,9 +1045,12 @@ function renderPlacesFilter() {
   filterEl.innerHTML = opts.map((c) =>
     `<button class="filter-chip${c === placesFilter ? ' active' : ''}" aria-pressed="${c === placesFilter}" data-city="${escapeHtml(c)}">${escapeHtml(c)}</button>`
   ).join('');
+  const on = filterEl.querySelector('.filter-chip.active');
+  if (on) filterEl.scrollLeft = Math.max(0, on.offsetLeft - 16);
   filterEl.querySelectorAll('.filter-chip').forEach((btn) => {
     btn.addEventListener('click', () => {
       placesFilter = btn.dataset.city;
+      placesFilterPicked = true;
       renderPlacesFilter();
       renderPlacesList();
       [...filterEl.querySelectorAll('.filter-chip')].find((b) => b.dataset.city === placesFilter)?.focus({ preventScroll: true });
@@ -1002,7 +1064,7 @@ function renderPlacesList() {
   list.innerHTML = `<ul class="place-list">${items.map((p) => `
     <li class="place-card">
       <button type="button" class="place-body" data-place="${STATE.places.indexOf(p)}">
-        <p class="name">${escapeHtml(p.name)}${p.inItinerary ? `<span class="hours-hint itin-hint">${icon('calendar')}${escapeHtml(p.inItinerary)}</span>` : ''}${p.hours ? `<span class="hours-hint">${icon('clock')}Hours</span>` : ''}</p>
+        <p class="name">${escapeHtml(p.name)} ${p.inItinerary ? `<span class="hours-hint itin-hint">${icon('calendar')}${escapeHtml(p.inItinerary)}</span>` : ''}${p.hours ? `<span class="hours-hint">${icon('clock')}Hours</span>` : ''}</p>
         <p class="meta">${[p.category, p.area].filter(Boolean).map(escapeHtml).join(' in ')}</p>
         ${p.notes ? `<p class="notes">${escapeHtml(p.notes)}</p>` : ''}
       </button>
@@ -1203,9 +1265,15 @@ function linkifyPhones(text) {
   });
 }
 
+/** "2026-10-03" → "3 Oct 2026" (anything else is shown as written). */
+function niceDate(iso) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  return m && MON[+m[2] - 1] ? `${+m[3]} ${MON[+m[2] - 1]} ${m[1]}` : String(iso || '');
+}
+
 function sourceLine(item) {
   if (!item || !item.source) return '';
-  return extLink(item.source, 'source-link', `source, verified ${escapeHtml(item.verified || '')}`);
+  return extLink(item.source, 'source-link', `${item.verified ? `Verified ${escapeHtml(niceDate(item.verified))} · ` : ''}Source`);
 }
 
 /* Which Handy country each itinerary Location belongs to. Edit if new locations are added. */
@@ -1341,8 +1409,13 @@ function renderHandy() {
 
   const fxHtml = '<section class="handy-section fx-section" id="fx-card"></section>';
 
+  const jumps = [['fx-card', 'Money'], ['hs-emergency', 'Emergency'], ...countries.map(([name], i) => [`hs-c${i}`, name]),
+    ['hs-transport', 'Transport'], ['hs-tml', 'Tomorrowland'], ['hs-weather', 'Weather']];
+  const jumpHtml = `<nav class="handy-jump" aria-label="Jump to a section">${jumps.map(([id, label]) =>
+    `<button type="button" class="filter-chip" data-jump="${id}">${escapeHtml(label)}</button>`).join('')}</nav>`;
+
   const emergencyHtml = `
-    <section class="handy-section">
+    <section class="handy-section" id="hs-emergency">
       <h2>${icon('alert')}Emergency</h2>
       ${emergency.map((e) => `
         <div class="handy-item">
@@ -1354,9 +1427,9 @@ function renderHandy() {
     </section>
   `;
 
-  const countryHtml = countries.map(([name, c]) => `
-    <section class="handy-section">
-      <h2>${icon('globe')}${escapeHtml(name)}${name === here ? ' <span class="here-badge">You\'re here</span>' : ''}</h2>
+  const countryHtml = countries.map(([name, c], i) => `
+    <details class="handy-section handy-fold" id="hs-c${i}"${name === here ? ' open' : ''}>
+      <summary><h2>${icon('globe')}${escapeHtml(name)}${name === here ? ' <span class="here-badge">You\'re here</span>' : ''}</h2>${icon('chevDown', 'fold-chev')}</summary>
       <div class="handy-item">
         <div class="handy-label">Currency</div>
         <div class="handy-value">${escapeHtml(c.currency.value)}</div>
@@ -1378,11 +1451,11 @@ function renderHandy() {
           ${c.phrases.map((p) => `<tr><td>${escapeHtml(p.en)}</td><td>${escapeHtml(p.local)}</td></tr>`).join('')}
         </table>
       </div>
-    </section>
+    </details>
   `).join('');
 
   const transportHtml = `
-    <section class="handy-section">
+    <section class="handy-section" id="hs-transport">
       <h2>${icon('train')}Transport</h2>
       ${HANDY.transport.map((t) => `
         <div class="handy-item">
@@ -1394,7 +1467,7 @@ function renderHandy() {
   `;
 
   const tomorrowlandHtml = `
-    <section class="handy-section">
+    <section class="handy-section" id="hs-tml">
       <h2>${icon('music')}Tomorrowland</h2>
       ${HANDY.tomorrowland.map((t) => `
         <div class="handy-item">
@@ -1405,7 +1478,7 @@ function renderHandy() {
   `;
 
   const weatherHtml = `
-    <section class="handy-section">
+    <section class="handy-section" id="hs-weather">
       <h2>${icon('sun')}Weather</h2>
       <div class="weather-grid">
         ${HANDY.weather.map((w) => extLink(w.url, 'weather-chip', escapeHtml(w.city))).join('')}
@@ -1413,7 +1486,14 @@ function renderHandy() {
     </section>
   `;
 
-  el.innerHTML = fxHtml + emergencyHtml + countryHtml + transportHtml + tomorrowlandHtml + weatherHtml;
+  el.innerHTML = jumpHtml + fxHtml + emergencyHtml + countryHtml + transportHtml + tomorrowlandHtml + weatherHtml;
+  el.querySelector('.handy-jump').addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-jump]');
+    const target = btn && document.getElementById(btn.dataset.jump);
+    if (!target) return;
+    if (target.tagName === 'DETAILS') target.open = true;
+    target.scrollIntoView({ block: 'start' });
+  });
   renderFx();
 }
 
@@ -1484,7 +1564,7 @@ window.addEventListener('popstate', () => {
 function renderCurrentScreen() {
   if (currentScreen === 'today') renderToday();
   if (currentScreen === 'overview') renderOverview();
-  if (currentScreen === 'places') { renderPlacesFilter(); renderPlacesList(); }
+  if (currentScreen === 'places') { followTodayInPlaces(); if (!STATE.places.some((p) => p.area === placesFilter)) placesFilter = 'All'; renderPlacesFilter(); renderPlacesList(); }
   if (currentScreen === 'handy') { renderHandy(); refreshFx(); }
   if (currentScreen === 'search') renderSearch();
 }
@@ -1497,7 +1577,7 @@ document.querySelectorAll('.bottom-nav button').forEach((btn) => {
   });
 });
 
-document.getElementById('day-today').addEventListener('click', () => goToDay(todayDayIndex()));
+document.getElementById('day-today').addEventListener('click', () => { goToDay(todayDayIndex()); scrollToNowSlot(); });
 
 /* ---------------- Data load + refresh ---------------- */
 
@@ -1594,6 +1674,7 @@ async function boot() {
     if (HASH_SCREEN[startHash.slice(1)]) applyHash(startHash);
     renderSyncFooter();
     document.body.classList.add('ready');
+    if (linked === -1) scrollToNowSlot();
     if (isFriendsMode() && !currentGroup()) showGroupPicker();
     else setTimeout(maybeShowInstallTip, 1500);
 
@@ -1640,7 +1721,7 @@ function renderTzClock() {
   const day = (tz) => now.toLocaleDateString('en-AU', { weekday: 'short', ...(tz ? { timeZone: tz } : {}) });
   const mel = `<b>Melbourne</b> ${time(MEL_TZ)} ${day(MEL_TZ)}`;
   const sameAsMel = time() === time(MEL_TZ) && day() === day(MEL_TZ);
-  el.innerHTML = sameAsMel ? mel : `<b>Here</b> ${time()} · ${mel}`;
+  el.innerHTML = sameAsMel ? '' : `<b>Here</b> ${time()} · ${mel}`;
 }
 /**
  * Phones resume home-screen apps instead of reloading them, so after midnight the app could still show
@@ -1658,7 +1739,7 @@ function checkNewDay() {
   handyKey = null;
   renderCurrentScreen();
 }
-function clockTick() { renderTzClock(); checkNewDay(); }
+function clockTick() { renderTzClock(); checkNewDay(); markNowSlot(); }
 function startTzClock() {
   renderTzClock();
   // Tick on the minute boundary, then every minute; check straight away when the app comes back to the foreground.
