@@ -543,41 +543,66 @@ function dayPlacesHtml(d) {
 
 /*
  * "Day route in Google Maps": the day's rows that have an Address in the sheet, in sheet order,
- * as one multi-stop route starting from wherever the phone is. Google's documented limit on
+ * as one multi-stop route. On the day itself it starts from wherever the phone is; on any other
+ * day (looking ahead or back) it starts at the first stop, because Google can't draw a route
+ * from, say, Melbourne to Cortona and shows nothing. Google's documented limit on
  * phones is 3 stops between start and end, so each button carries at most 4 stops; longer days
- * are split into evenly sized parts so no stop is dropped. Shown only with 2+ addressed stops.
+ * are split into evenly sized parts so no stop is dropped, and the route also breaks at a flight.
+ * Shown only with 2+ addressed stops.
  */
 const ROUTE_STOPS_PER_LINK = 4;
-function dayRouteStops(d) {
-  const out = [];
+/** The day's addressed stops, grouped into stretches you can actually travel by road, rail or ferry. */
+function dayRouteSegments(d) {
+  const segs = [[]];
   for (const slot of ['Morning', 'Afternoon', 'Evening', 'Plans']) {
     for (const c of d.slots[slot]) {
       const a = (c.address || '').trim();
-      if (a && out[out.length - 1] !== a) out.push(a); // same address twice in a row = one stop
+      if (!a) continue;
+      // A flight row's address is where you land. Google would draw getting there as a day-long
+      // drive, so the route breaks before it and a new stretch starts at the arrival airport.
+      if (c.mode === 'plane') segs.push([]);
+      const seg = segs[segs.length - 1];
+      if (seg[seg.length - 1] !== a) seg.push(a); // same address twice in a row = one stop
     }
   }
-  return out;
+  return segs.filter((x) => x.length);
 }
 function dayRouteHtml(d) {
-  const stops = dayRouteStops(d);
-  if (stops.length < 2) return '';
-  const parts = Math.ceil(stops.length / ROUTE_STOPS_PER_LINK);
-  const size = Math.ceil(stops.length / parts);
+  const segs = dayRouteSegments(d);
+  if (segs.reduce((n, x) => n + x.length, 0) < 2) return '';
+  const ti = todayDayIndex();
+  const onTheDay = ti !== -1 && STATE.days[ti] === d;
+  // Cut each stretch into links of at most 4 stops (evenly sized), numbering stops across the day.
+  const chunks = [];
+  let n = 0;
+  for (const seg of segs) {
+    const parts = Math.ceil(seg.length / ROUTE_STOPS_PER_LINK);
+    const size = Math.ceil(seg.length / parts);
+    for (let i = 0; i < seg.length; i += size) {
+      const stops = seg.slice(i, i + size);
+      chunks.push({ stops, from: n + 1, to: n + stops.length });
+      n += stops.length;
+    }
+  }
+  // A lone stop only makes a route on the day itself (from where the phone is).
+  const shown = chunks.filter((c) => c.stops.length > 1 || onTheDay);
   let html = '';
-  for (let i = 0; i < parts; i++) {
-    const chunk = stops.slice(i * size, (i + 1) * size);
-    if (!chunk.length) continue;
-    const dest = chunk[chunk.length - 1];
-    const via = chunk.slice(0, -1);
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`
+  shown.forEach((c, i) => {
+    const dest = c.stops[c.stops.length - 1];
+    const origin = onTheDay ? null : c.stops[0];
+    const via = c.stops.slice(onTheDay ? 0 : 1, -1);
+    const url = 'https://www.google.com/maps/dir/?api=1'
+      + (origin ? `&origin=${encodeURIComponent(origin)}` : '')
+      + `&destination=${encodeURIComponent(dest)}`
       + (via.length ? `&waypoints=${encodeURIComponent(via.join('|'))}` : '');
-    if (url.length > 2048) continue; // Google's URL limit
-    const from = i * size + 1, to = i * size + chunk.length;
-    const label = parts > 1 ? `Day route · part ${i + 1} of ${parts}` : 'Day route in Google Maps';
-    const sub = parts > 1 ? (from === to ? `stop ${from}` : `stops ${from}–${to}`) : `${stops.length} stops`;
+    if (url.length > 2048) return; // Google's URL limit
+    const many = shown.length > 1;
+    const label = many ? `Day route · part ${i + 1} of ${shown.length}` : 'Day route in Google Maps';
+    const sub = (many ? (c.from === c.to ? `stop ${c.from}` : `stops ${c.from}–${c.to}`) : `${c.stops.length} stops`)
+      + (onTheDay ? ' · from here' : '');
     html += extLink(url, 'picker-btn alt day-places day-route',
       `<span>${icon('route')}${label}</span><span class="picker-range">${sub}${icon('chevRight')}</span>`);
-  }
+  });
   return html;
 }
 
