@@ -537,7 +537,48 @@ function dayPlacesHtml(d) {
     return n ? `<button type="button" class="picker-btn alt day-places" data-area="${escapeHtml(loc)}">
       <span>${icon('pin')}Places to try in ${escapeHtml(loc)}</span><span class="picker-range">${n}${icon('chevRight')}</span></button>` : '';
   }).join('');
-  return btns ? `<div class="day-places-wrap">${btns}</div>` : '';
+  const routes = dayRouteHtml(d);
+  return btns || routes ? `<div class="day-places-wrap">${routes}${btns}</div>` : '';
+}
+
+/*
+ * "Day route in Google Maps": the day's rows that have an Address in the sheet, in sheet order,
+ * as one multi-stop route starting from wherever the phone is. Google's documented limit on
+ * phones is 3 stops between start and end, so each button carries at most 4 stops; longer days
+ * are split into evenly sized parts so no stop is dropped. Shown only with 2+ addressed stops.
+ */
+const ROUTE_STOPS_PER_LINK = 4;
+function dayRouteStops(d) {
+  const out = [];
+  for (const slot of ['Morning', 'Afternoon', 'Evening', 'Plans']) {
+    for (const c of d.slots[slot]) {
+      const a = (c.address || '').trim();
+      if (a && out[out.length - 1] !== a) out.push(a); // same address twice in a row = one stop
+    }
+  }
+  return out;
+}
+function dayRouteHtml(d) {
+  const stops = dayRouteStops(d);
+  if (stops.length < 2) return '';
+  const parts = Math.ceil(stops.length / ROUTE_STOPS_PER_LINK);
+  const size = Math.ceil(stops.length / parts);
+  let html = '';
+  for (let i = 0; i < parts; i++) {
+    const chunk = stops.slice(i * size, (i + 1) * size);
+    if (!chunk.length) continue;
+    const dest = chunk[chunk.length - 1];
+    const via = chunk.slice(0, -1);
+    const url = `https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(dest)}`
+      + (via.length ? `&waypoints=${encodeURIComponent(via.join('|'))}` : '');
+    if (url.length > 2048) continue; // Google's URL limit
+    const from = i * size + 1, to = i * size + chunk.length;
+    const label = parts > 1 ? `Day route · part ${i + 1} of ${parts}` : 'Day route in Google Maps';
+    const sub = parts > 1 ? (from === to ? `stop ${from}` : `stops ${from}–${to}`) : `${stops.length} stops`;
+    html += extLink(url, 'picker-btn alt day-places day-route',
+      `<span>${icon('route')}${label}</span><span class="picker-range">${sub}${icon('chevRight')}</span>`);
+  }
+  return html;
 }
 
 /** Part of the day by the phone's clock: before noon, noon to 5pm, 5pm on. */
@@ -573,7 +614,7 @@ function setExpanded(btn, open) {
 document.getElementById('timeline').addEventListener('click', async (e) => {
   const toggle = e.target.closest('.xp-toggle');
   if (toggle) { setExpanded(toggle, toggle.getAttribute('aria-expanded') !== 'true'); return; }
-  const dp = e.target.closest('.day-places');
+  const dp = e.target.closest('button.day-places');
   if (dp) { openPlacesFor(dp.dataset.area); return; }
   const copy = e.target.closest('.xp-copy');
   if (!copy) return;
