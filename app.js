@@ -572,9 +572,11 @@ function routeCandidates(d) {
       const label = c.linkLabel && !/^https?:\/\//i.test(c.linkLabel) ? c.linkLabel : '';
       const q = address || (label ? [label, c.location].filter(Boolean).join(', ') : '');
       if (!q) continue;
+      // Lead with the place (the sheet's Link name, else the address); the activity goes underneath.
       add({
-        id: `c|${c.title}|${q}`, name: c.title || label, sub: `${slot === 'Plans' ? 'Any time' : slot} · ${q}`,
-        q, plane: c.mode === 'plane', planned: Boolean(address),
+        id: `c|${c.title}|${q}`, name: label || address,
+        sub: [slot === 'Plans' ? 'Any time' : slot, c.title].filter(Boolean).join(' · '),
+        q, plane: c.mode === 'plane', planned: Boolean(address), kind: 'day',
       });
     }
   }
@@ -582,7 +584,7 @@ function routeCandidates(d) {
     for (const p of STATE.places.filter((x) => x.area === loc)) {
       add({
         id: `p|${p.name}|${p.area}`, name: p.name, sub: ['Place to try', p.category, p.area].filter(Boolean).join(' · '),
-        q: [p.name, p.area].filter(Boolean).join(', '), plane: false, planned: false,
+        q: [p.name, p.area].filter(Boolean).join(', '), plane: false, planned: false, kind: 'place',
       });
     }
   }
@@ -604,39 +606,39 @@ function isOnTheDay(d) {
   return ti !== -1 && STATE.days[ti] === d;
 }
 
-/** Google Maps links for an ordered list of stops: [{ url, from, to, count }]. */
+/** Google Maps links for an ordered list of stops: [{ url, first, last, count }] (first/last = list positions). */
 function routeLinks(items, onTheDay) {
   // Stretches you can travel without flying: a flight row starts a new one (its address is where you land).
   const segs = [[]];
-  for (const it of items) {
+  items.forEach((it, idx) => {
     if (it.plane && segs[segs.length - 1].length) segs.push([]);
     const seg = segs[segs.length - 1];
-    if (seg[seg.length - 1] !== it.q) seg.push(it.q); // same place twice in a row = one stop
-  }
+    const prev = seg[seg.length - 1];
+    if (prev && prev.q === it.q) prev.last = idx; // same place twice in a row = one stop
+    else seg.push({ q: it.q, first: idx, last: idx });
+  });
   const chunks = [];
-  let n = 0;
   for (const seg of segs.filter((x) => x.length)) {
     const parts = Math.ceil(seg.length / ROUTE_STOPS_PER_LINK);
     const size = Math.ceil(seg.length / parts);
     for (let i = 0; i < seg.length; i += size) {
-      const stops = seg.slice(i, i + size);
       // A later part picks up where the previous part ended, so no leg between parts goes missing.
-      chunks.push({ stops, from: n + 1, to: n + stops.length, prev: i > 0 ? seg[i - 1] : null });
-      n += stops.length;
+      chunks.push({ stops: seg.slice(i, i + size), prev: i > 0 ? seg[i - 1].q : null });
     }
   }
   const out = [];
   for (const c of chunks) {
     if (c.stops.length < 2 && !onTheDay && !c.prev) continue; // a lone stop needs somewhere to start from
-    const dest = c.stops[c.stops.length - 1];
-    const origin = onTheDay ? null : (c.prev || c.stops[0]);
-    const via = c.stops.slice(onTheDay || c.prev ? 0 : 1, -1);
+    const qs = c.stops.map((x) => x.q);
+    const dest = qs[qs.length - 1];
+    const origin = onTheDay ? null : (c.prev || qs[0]);
+    const via = qs.slice(onTheDay || c.prev ? 0 : 1, -1);
     const url = 'https://www.google.com/maps/dir/?api=1'
       + (origin ? `&origin=${encodeURIComponent(origin)}` : '')
       + `&destination=${encodeURIComponent(dest)}`
       + (via.length ? `&waypoints=${encodeURIComponent(via.join('|'))}` : '');
     if (url.length > 2048) continue; // Google's URL limit
-    out.push({ url, from: c.from, to: c.to, count: c.stops.length });
+    out.push({ url, first: c.stops[0].first, last: c.stops[c.stops.length - 1].last, count: qs.length });
   }
   return out;
 }
@@ -645,24 +647,28 @@ function routeLinks(items, onTheDay) {
 function dayRouteHtml(d) {
   if (!routeCandidates(d).length) return '';
   return `<button type="button" class="picker-btn alt day-places day-route-open" id="day-route-open">
-    <span>${icon('route')}Day route in Google Maps</span><span class="picker-range" id="day-route-sub">${dayRouteSub(d)}${icon('chevRight')}</span></button>`;
+    <span>${icon('route')}Plan day route</span><span class="picker-range" id="day-route-sub">${dayRouteSub(d)}${icon('chevRight')}</span></button>`;
 }
 function dayRouteSub(d) {
   const { items, custom } = routeSelection(d);
   if (!items.length) return 'Choose stops';
-  return `${items.length} stop${items.length === 1 ? '' : 's'}${custom ? ' · your picks' : ''}`;
+  return `${items.length} stop${items.length === 1 ? '' : 's'}${custom ? ' · edited' : ''}`;
 }
 
 /* ---- Route picker panel ---- */
 let routeDay = null;
+let routePlacesOpen = false; // "Places to try" group in the picker stays as the person left it
 function showRoutePanel(d) {
   routeDay = d;
+  routePlacesOpen = false;
   const el = document.getElementById('group-picker');
   el.innerHTML = `<div class="picker-card detail-card route-card" role="dialog" aria-label="Day route">
     ${sheetTop('route-close')}
     <p class="picker-title">Day route</p>
-    <p class="picker-sub">Day ${d.day} · ${escapeHtml(dayDateLabel(d))}. Choose where you're going, put it in order, then open it in Google Maps.</p>
+    <p class="picker-sub">Day ${d.day} · ${escapeHtml(dayDateLabel(d))}</p>
     <div id="route-body"></div>
+    <p class="sr" id="route-live" aria-live="polite"></p>
+    <div id="route-foot" class="rt-foot"></div>
   </div>`;
   el.hidden = false;
   stayPanelOpen = true;
@@ -673,35 +679,48 @@ function showRoutePanel(d) {
 
 function drawRouteBody() {
   const body = document.getElementById('route-body');
+  const foot = document.getElementById('route-foot');
   const d = routeDay;
-  if (!body || !d) return;
+  if (!body || !foot || !d) return;
   const cands = routeCandidates(d);
   const { items, custom } = routeSelection(d, cands);
   const rest = cands.filter((c) => !items.includes(c));
   const onTheDay = isOnTheDay(d);
   const links = routeLinks(items, onTheDay);
-  const row = (it, i, list) => `<li class="rt-row">
-      ${list === 'sel' ? `<span class="rt-n" aria-hidden="true">${i + 1}</span>` : ''}
-      <span class="rt-text"><span class="rt-name">${escapeHtml(it.name)}</span><span class="rt-sub">${escapeHtml(it.sub)}</span></span>
-      ${list === 'sel' ? `
-        <button type="button" class="rt-btn" data-act="up" data-i="${i}" aria-label="Move ${escapeHtml(it.name)} up"${i === 0 ? ' disabled' : ''}>${icon('chevDown', 'flip')}</button>
-        <button type="button" class="rt-btn" data-act="down" data-i="${i}" aria-label="Move ${escapeHtml(it.name)} down"${i === items.length - 1 ? ' disabled' : ''}>${icon('chevDown')}</button>
-        <button type="button" class="rt-btn" data-act="remove" data-i="${i}" aria-label="Take ${escapeHtml(it.name)} off the route">${icon('close')}</button>`
-    : `<button type="button" class="rt-btn rt-add" data-act="add" data-i="${i}" aria-label="Add ${escapeHtml(it.name)} to the route"><span aria-hidden="true">+</span> Add</button>`}
+  const text = (it) => `<span class="rt-text"><span class="rt-name">${escapeHtml(it.name)}</span><span class="rt-sub">${escapeHtml(it.sub)}</span></span>`;
+  const selRow = (it, i) => {
+    const part = links.length > 1 ? links.findIndex((l) => l.first === i) : -1;
+    return `${part !== -1 ? `<li class="rt-part">Part ${part + 1}${part > 0 ? ' · opens separately' : ''}</li>` : ''}
+    <li class="rt-row" data-row="${i}">
+      <span class="rt-n" aria-hidden="true">${i + 1}</span>
+      ${text(it)}
+      <button type="button" class="rt-btn" data-act="up" data-i="${i}" aria-label="Move ${escapeHtml(it.name)} up"${i === 0 ? ' disabled' : ''}>${icon('chevDown', 'flip')}</button>
+      <button type="button" class="rt-btn" data-act="remove" data-i="${i}" aria-label="Remove ${escapeHtml(it.name)} from the route">${icon('minus')}</button>
     </li>`;
-  const linkHtml = links.map((l, i) => extLink(l.url, 'picker-btn',
-    `<span>${links.length > 1 ? `Open part ${i + 1} of ${links.length}` : 'Open in Google Maps'}</span><span class="picker-range">${
-      links.length > 1 ? (l.from === l.to ? `stop ${l.from}` : `stops ${l.from}–${l.to}`) : `${l.count} stop${l.count === 1 ? '' : 's'}`}</span>`)).join('');
+  };
+  const addRow = (it) => `<li class="rt-row">
+      ${text(it)}
+      <button type="button" class="rt-btn rt-add" data-act="add" data-i="${rest.indexOf(it)}" aria-label="Add ${escapeHtml(it.name)} to the route">${icon('plus')}Add</button>
+    </li>`;
+  const restDay = rest.filter((c) => c.kind === 'day');
+  const restPlaces = rest.filter((c) => c.kind === 'place');
   body.innerHTML = `
-    <p class="detail-label rt-head">Your route</p>
-    ${items.length ? `<ol class="rt-list">${items.map((it, i) => row(it, i, 'sel')).join('')}</ol>`
-    : '<p class="rt-empty">No stops yet. Add some from the list below.</p>'}
-    ${linkHtml || (items.length ? '<p class="rt-empty">Add at least two stops to make a route.</p>' : '')}
-    ${linkHtml ? `<p class="detail-note rt-note">${onTheDay ? 'Starts from where you are now.' : 'Starts at your first stop. On the day itself it starts from where you are.'}${
-      links.length > 1 ? ' Google Maps takes a few stops at a time on phones, so the route is in parts.' : ''}</p>` : ''}
-    ${rest.length ? `<p class="detail-label rt-head">Add a stop</p><ul class="rt-list">${rest.map((it, i) => row(it, i, 'rest')).join('')}</ul>` : ''}
-    ${custom ? '<button type="button" class="rt-reset" data-act="reset">Reset to the plan</button>' : ''}
-    <p class="detail-note rt-note">Your choices are saved on this phone only.</p>`;
+    <p class="detail-label rt-head">Route</p>
+    ${items.length ? `<ol class="rt-list">${items.map(selRow).join('')}</ol>` : '<p class="rt-empty">No stops yet. Add some below.</p>'}
+    ${links.length ? `<p class="detail-note rt-note">${onTheDay ? 'Starts from your location.' : 'Starts at stop 1. On the day, starts from your location.'}</p>` : ''}
+    ${custom ? '<p class="rt-saved"><span>Edited · saved on this phone</span><button type="button" class="rt-reset" data-act="reset">Reset to the plan</button></p>' : ''}
+    ${restDay.length ? `<p class="detail-label rt-head">Also planned today</p><ul class="rt-list">${restDay.map(addRow).join('')}</ul>` : ''}
+    ${restPlaces.length ? `<details class="rt-more" id="rt-more"${routePlacesOpen ? ' open' : ''}>
+      <summary><span>Places to try</span><span class="rt-more-n">${restPlaces.length}${icon('chevDown', 'fold-chev')}</span></summary>
+      <ul class="rt-list">${restPlaces.map(addRow).join('')}</ul></details>` : ''}`;
+  body.querySelector('#rt-more')?.addEventListener('toggle', (e) => { routePlacesOpen = e.currentTarget.open; });
+  // The way out to Google Maps stays pinned to the bottom of the sheet.
+  foot.innerHTML = links.length
+    ? `<div class="rt-open${links.length > 1 ? ' many' : ''}">${links.map((l, i) => extLink(l.url, 'picker-btn',
+      links.length > 1
+        ? `<span>Open part ${i + 1}</span><span class="picker-range">${l.first === l.last ? `stop ${l.first + 1}` : `stops ${l.first + 1}–${l.last + 1}`}</span>`
+        : `<span>Open in Google Maps</span><span class="picker-range">${l.count} stop${l.count === 1 ? '' : 's'}</span>`)).join('')}</div>`
+    : `<p class="rt-empty">${items.length ? 'Add at least two stops to make a route.' : 'Add stops to make a route.'}</p>`;
 }
 
 document.getElementById('group-picker').addEventListener('click', (e) => {
@@ -714,11 +733,16 @@ document.getElementById('group-picker').addEventListener('click', (e) => {
   const act = btn.dataset.act;
   const i = parseInt(btn.dataset.i, 10);
   const ids = items.map((c) => c.id);
-  let focus = null; // which control to land on after the list redraws
-  if (act === 'up' && i > 0) { [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; focus = ['up', i - 1]; }
-  else if (act === 'down' && i < ids.length - 1) { [ids[i + 1], ids[i]] = [ids[i], ids[i + 1]]; focus = ['down', i + 1]; }
-  else if (act === 'remove') { ids.splice(i, 1); focus = ['remove', Math.min(i, ids.length - 1)]; }
-  else if (act === 'add' && rest[i]) { ids.push(rest[i].id); focus = ['add', Math.min(i, rest.length - 2)]; }
+  let focus = null;  // which control to land on after the list redraws
+  let moved = -1;    // row to highlight
+  let say = '';      // spoken confirmation for screen readers
+  if (act === 'up' && i > 0) {
+    [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; focus = ['up', i - 1]; moved = i - 1; say = `${items[i].name} moved to ${i}`;
+  } else if (act === 'remove') {
+    ids.splice(i, 1); focus = ['remove', Math.min(i, ids.length - 1)]; say = `${items[i].name} removed`;
+  } else if (act === 'add' && rest[i]) {
+    ids.push(rest[i].id); focus = ['add', Math.min(i, rest.length - 2)]; moved = ids.length - 1; say = `${rest[i].name} added as stop ${ids.length}`;
+  } else if (act === 'reset') { say = 'Route reset to the plan'; }
   const all = loadRoutes();
   if (act === 'reset') delete all[d.day]; else all[d.day] = ids;
   saveRoutes(all);
@@ -726,8 +750,11 @@ document.getElementById('group-picker').addEventListener('click', (e) => {
   const sub = document.getElementById('day-route-sub');
   if (sub) sub.innerHTML = `${dayRouteSub(d)}${icon('chevRight')}`;
   const body = document.getElementById('route-body');
+  document.getElementById('route-live').textContent = say;
+  const row = moved === -1 ? null : body.querySelector(`[data-row="${moved}"]`);
+  if (row) row.classList.add('rt-flash');
   let next = focus && body.querySelector(`[data-act="${focus[0]}"][data-i="${focus[1]}"]`);
-  if (next && next.disabled) next = body.querySelector(`[data-act="${focus[0] === 'up' ? 'down' : 'up'}"][data-i="${focus[1]}"]`);
+  if (next && next.disabled) next = body.querySelector(`[data-act="remove"][data-i="${focus[1]}"]`);
   (next || body.querySelector('.rt-btn') || document.getElementById('route-close'))?.focus({ preventScroll: true });
 });
 
