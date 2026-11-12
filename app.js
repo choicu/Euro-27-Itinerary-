@@ -542,69 +542,194 @@ function dayPlacesHtml(d) {
 }
 
 /*
- * "Day route in Google Maps": the day's rows that have an Address in the sheet, in sheet order,
- * as one multi-stop route. On the day itself it starts from wherever the phone is; on any other
- * day (looking ahead or back) it starts at the first stop, because Google can't draw a route
- * from, say, Melbourne to Cortona and shows nothing. Google's documented limit on
- * phones is 3 stops between start and end, so each button carries at most 4 stops; longer days
- * are split into evenly sized parts so no stop is dropped, and the route also breaks at a flight.
- * Shown only with 2+ addressed stops.
+ * "Day route in Google Maps": one button per day opens a picker. You tick where you're going,
+ * put it in order, and open the result in Google Maps as a multi-stop route.
+ *  - Choices: the day's rows that have an Address or a Link name, plus Places to try in the day's towns.
+ *    A row with no exact address is sent to Google as "name, town" (like the map buttons).
+ *  - Starting list: the rows with an Address, in sheet order. Changes are saved on this phone, per day.
+ *  - On the day itself the route starts from wherever the phone is; on any other day it starts at the
+ *    first stop (Google can't draw a route from, say, Melbourne to Cortona and shows nothing).
+ *  - Google's documented limit on phones is 3 stops between start and end, so each link carries at
+ *    most 4 stops; longer routes are split into evenly sized parts. The route also breaks at a flight.
  */
 const ROUTE_STOPS_PER_LINK = 4;
-/** The day's addressed stops, grouped into stretches you can actually travel by road, rail or ferry. */
-function dayRouteSegments(d) {
-  const segs = [[]];
+const ROUTE_KEY = 'europe2027_route_v1';
+let routeMem = null; // used when storage is blocked
+function loadRoutes() {
+  if (routeMem) return routeMem;
+  try { return JSON.parse(localStorage.getItem(ROUTE_KEY)) || {}; } catch (_) { return {}; }
+}
+function saveRoutes(v) { routeMem = v; try { localStorage.setItem(ROUTE_KEY, JSON.stringify(v)); } catch (_) { /* kept in memory */ } }
+
+/** Everything that can be a stop on this day. */
+function routeCandidates(d) {
+  const out = [];
+  const seen = new Set();
+  const add = (item) => { if (!seen.has(item.id)) { seen.add(item.id); out.push(item); } };
   for (const slot of ['Morning', 'Afternoon', 'Evening', 'Plans']) {
     for (const c of d.slots[slot]) {
-      const a = (c.address || '').trim();
-      if (!a) continue;
-      // A flight row's address is where you land. Google would draw getting there as a day-long
-      // drive, so the route breaks before it and a new stretch starts at the arrival airport.
-      if (c.mode === 'plane') segs.push([]);
-      const seg = segs[segs.length - 1];
-      if (seg[seg.length - 1] !== a) seg.push(a); // same address twice in a row = one stop
+      const address = (c.address || '').trim();
+      const label = c.linkLabel && !/^https?:\/\//i.test(c.linkLabel) ? c.linkLabel : '';
+      const q = address || (label ? [label, c.location].filter(Boolean).join(', ') : '');
+      if (!q) continue;
+      add({
+        id: `c|${c.title}|${q}`, name: c.title || label, sub: `${slot === 'Plans' ? 'Any time' : slot} · ${q}`,
+        q, plane: c.mode === 'plane', planned: Boolean(address),
+      });
     }
   }
-  return segs.filter((x) => x.length);
+  for (const loc of d.locations) {
+    for (const p of STATE.places.filter((x) => x.area === loc)) {
+      add({
+        id: `p|${p.name}|${p.area}`, name: p.name, sub: ['Place to try', p.category, p.area].filter(Boolean).join(' · '),
+        q: [p.name, p.area].filter(Boolean).join(', '), plane: false, planned: false,
+      });
+    }
+  }
+  return out;
 }
-function dayRouteHtml(d) {
-  const segs = dayRouteSegments(d);
-  if (segs.reduce((n, x) => n + x.length, 0) < 2) return '';
+
+/** The stops chosen for a day, in order: this phone's saved picks, else the rows with an Address. */
+function routeSelection(d, cands = routeCandidates(d)) {
+  const saved = loadRoutes()[d.day];
+  if (Array.isArray(saved)) {
+    const byId = new Map(cands.map((c) => [c.id, c]));
+    return { items: saved.map((id) => byId.get(id)).filter(Boolean), custom: true };
+  }
+  return { items: cands.filter((c) => c.planned), custom: false };
+}
+
+function isOnTheDay(d) {
   const ti = todayDayIndex();
-  const onTheDay = ti !== -1 && STATE.days[ti] === d;
-  // Cut each stretch into links of at most 4 stops (evenly sized), numbering stops across the day.
+  return ti !== -1 && STATE.days[ti] === d;
+}
+
+/** Google Maps links for an ordered list of stops: [{ url, from, to, count }]. */
+function routeLinks(items, onTheDay) {
+  // Stretches you can travel without flying: a flight row starts a new one (its address is where you land).
+  const segs = [[]];
+  for (const it of items) {
+    if (it.plane && segs[segs.length - 1].length) segs.push([]);
+    const seg = segs[segs.length - 1];
+    if (seg[seg.length - 1] !== it.q) seg.push(it.q); // same place twice in a row = one stop
+  }
   const chunks = [];
   let n = 0;
-  for (const seg of segs) {
+  for (const seg of segs.filter((x) => x.length)) {
     const parts = Math.ceil(seg.length / ROUTE_STOPS_PER_LINK);
     const size = Math.ceil(seg.length / parts);
     for (let i = 0; i < seg.length; i += size) {
       const stops = seg.slice(i, i + size);
-      chunks.push({ stops, from: n + 1, to: n + stops.length });
+      // A later part picks up where the previous part ended, so no leg between parts goes missing.
+      chunks.push({ stops, from: n + 1, to: n + stops.length, prev: i > 0 ? seg[i - 1] : null });
       n += stops.length;
     }
   }
-  // A lone stop only makes a route on the day itself (from where the phone is).
-  const shown = chunks.filter((c) => c.stops.length > 1 || onTheDay);
-  let html = '';
-  shown.forEach((c, i) => {
+  const out = [];
+  for (const c of chunks) {
+    if (c.stops.length < 2 && !onTheDay && !c.prev) continue; // a lone stop needs somewhere to start from
     const dest = c.stops[c.stops.length - 1];
-    const origin = onTheDay ? null : c.stops[0];
-    const via = c.stops.slice(onTheDay ? 0 : 1, -1);
+    const origin = onTheDay ? null : (c.prev || c.stops[0]);
+    const via = c.stops.slice(onTheDay || c.prev ? 0 : 1, -1);
     const url = 'https://www.google.com/maps/dir/?api=1'
       + (origin ? `&origin=${encodeURIComponent(origin)}` : '')
       + `&destination=${encodeURIComponent(dest)}`
       + (via.length ? `&waypoints=${encodeURIComponent(via.join('|'))}` : '');
-    if (url.length > 2048) return; // Google's URL limit
-    const many = shown.length > 1;
-    const label = many ? `Day route · part ${i + 1} of ${shown.length}` : 'Day route in Google Maps';
-    const sub = (many ? (c.from === c.to ? `stop ${c.from}` : `stops ${c.from}–${c.to}`) : `${c.stops.length} stops`)
-      + (onTheDay ? ' · from here' : '');
-    html += extLink(url, 'picker-btn alt day-places day-route',
-      `<span>${icon('route')}${label}</span><span class="picker-range">${sub}${icon('chevRight')}</span>`);
-  });
-  return html;
+    if (url.length > 2048) continue; // Google's URL limit
+    out.push({ url, from: c.from, to: c.to, count: c.stops.length });
+  }
+  return out;
 }
+
+/** The day's button: opens the picker. Shown when the day has anything that could be a stop. */
+function dayRouteHtml(d) {
+  if (!routeCandidates(d).length) return '';
+  return `<button type="button" class="picker-btn alt day-places day-route-open" id="day-route-open">
+    <span>${icon('route')}Day route in Google Maps</span><span class="picker-range" id="day-route-sub">${dayRouteSub(d)}${icon('chevRight')}</span></button>`;
+}
+function dayRouteSub(d) {
+  const { items, custom } = routeSelection(d);
+  if (!items.length) return 'Choose stops';
+  return `${items.length} stop${items.length === 1 ? '' : 's'}${custom ? ' · your picks' : ''}`;
+}
+
+/* ---- Route picker panel ---- */
+let routeDay = null;
+function showRoutePanel(d) {
+  routeDay = d;
+  const el = document.getElementById('group-picker');
+  el.innerHTML = `<div class="picker-card detail-card route-card" role="dialog" aria-label="Day route">
+    ${sheetTop('route-close')}
+    <p class="picker-title">Day route</p>
+    <p class="picker-sub">Day ${d.day} · ${escapeHtml(dayDateLabel(d))}. Choose where you're going, put it in order, then open it in Google Maps.</p>
+    <div id="route-body"></div>
+  </div>`;
+  el.hidden = false;
+  stayPanelOpen = true;
+  panelOpened('route-close');
+  document.getElementById('route-close').addEventListener('click', closeStayPanel);
+  drawRouteBody();
+}
+
+function drawRouteBody() {
+  const body = document.getElementById('route-body');
+  const d = routeDay;
+  if (!body || !d) return;
+  const cands = routeCandidates(d);
+  const { items, custom } = routeSelection(d, cands);
+  const rest = cands.filter((c) => !items.includes(c));
+  const onTheDay = isOnTheDay(d);
+  const links = routeLinks(items, onTheDay);
+  const row = (it, i, list) => `<li class="rt-row">
+      ${list === 'sel' ? `<span class="rt-n" aria-hidden="true">${i + 1}</span>` : ''}
+      <span class="rt-text"><span class="rt-name">${escapeHtml(it.name)}</span><span class="rt-sub">${escapeHtml(it.sub)}</span></span>
+      ${list === 'sel' ? `
+        <button type="button" class="rt-btn" data-act="up" data-i="${i}" aria-label="Move ${escapeHtml(it.name)} up"${i === 0 ? ' disabled' : ''}>${icon('chevDown', 'flip')}</button>
+        <button type="button" class="rt-btn" data-act="down" data-i="${i}" aria-label="Move ${escapeHtml(it.name)} down"${i === items.length - 1 ? ' disabled' : ''}>${icon('chevDown')}</button>
+        <button type="button" class="rt-btn" data-act="remove" data-i="${i}" aria-label="Take ${escapeHtml(it.name)} off the route">${icon('close')}</button>`
+    : `<button type="button" class="rt-btn rt-add" data-act="add" data-i="${i}" aria-label="Add ${escapeHtml(it.name)} to the route"><span aria-hidden="true">+</span> Add</button>`}
+    </li>`;
+  const linkHtml = links.map((l, i) => extLink(l.url, 'picker-btn',
+    `<span>${links.length > 1 ? `Open part ${i + 1} of ${links.length}` : 'Open in Google Maps'}</span><span class="picker-range">${
+      links.length > 1 ? (l.from === l.to ? `stop ${l.from}` : `stops ${l.from}–${l.to}`) : `${l.count} stop${l.count === 1 ? '' : 's'}`}</span>`)).join('');
+  body.innerHTML = `
+    <p class="detail-label rt-head">Your route</p>
+    ${items.length ? `<ol class="rt-list">${items.map((it, i) => row(it, i, 'sel')).join('')}</ol>`
+    : '<p class="rt-empty">No stops yet. Add some from the list below.</p>'}
+    ${linkHtml || (items.length ? '<p class="rt-empty">Add at least two stops to make a route.</p>' : '')}
+    ${linkHtml ? `<p class="detail-note rt-note">${onTheDay ? 'Starts from where you are now.' : 'Starts at your first stop. On the day itself it starts from where you are.'}${
+      links.length > 1 ? ' Google Maps takes a few stops at a time on phones, so the route is in parts.' : ''}</p>` : ''}
+    ${rest.length ? `<p class="detail-label rt-head">Add a stop</p><ul class="rt-list">${rest.map((it, i) => row(it, i, 'rest')).join('')}</ul>` : ''}
+    ${custom ? '<button type="button" class="rt-reset" data-act="reset">Reset to the plan</button>' : ''}
+    <p class="detail-note rt-note">Your choices are saved on this phone only.</p>`;
+}
+
+document.getElementById('group-picker').addEventListener('click', (e) => {
+  const btn = e.target.closest('#route-body [data-act]');
+  if (!btn || !routeDay) return;
+  const d = routeDay;
+  const cands = routeCandidates(d);
+  const { items } = routeSelection(d, cands);
+  const rest = cands.filter((c) => !items.includes(c));
+  const act = btn.dataset.act;
+  const i = parseInt(btn.dataset.i, 10);
+  const ids = items.map((c) => c.id);
+  let focus = null; // which control to land on after the list redraws
+  if (act === 'up' && i > 0) { [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; focus = ['up', i - 1]; }
+  else if (act === 'down' && i < ids.length - 1) { [ids[i + 1], ids[i]] = [ids[i], ids[i + 1]]; focus = ['down', i + 1]; }
+  else if (act === 'remove') { ids.splice(i, 1); focus = ['remove', Math.min(i, ids.length - 1)]; }
+  else if (act === 'add' && rest[i]) { ids.push(rest[i].id); focus = ['add', Math.min(i, rest.length - 2)]; }
+  const all = loadRoutes();
+  if (act === 'reset') delete all[d.day]; else all[d.day] = ids;
+  saveRoutes(all);
+  drawRouteBody();
+  const sub = document.getElementById('day-route-sub');
+  if (sub) sub.innerHTML = `${dayRouteSub(d)}${icon('chevRight')}`;
+  const body = document.getElementById('route-body');
+  let next = focus && body.querySelector(`[data-act="${focus[0]}"][data-i="${focus[1]}"]`);
+  if (next && next.disabled) next = body.querySelector(`[data-act="${focus[0] === 'up' ? 'down' : 'up'}"][data-i="${focus[1]}"]`);
+  (next || body.querySelector('.rt-btn') || document.getElementById('route-close'))?.focus({ preventScroll: true });
+});
 
 /** Part of the day by the phone's clock: before noon, noon to 5pm, 5pm on. */
 function nowSlot() {
@@ -640,6 +765,7 @@ document.getElementById('timeline').addEventListener('click', async (e) => {
   const toggle = e.target.closest('.xp-toggle');
   if (toggle) { setExpanded(toggle, toggle.getAttribute('aria-expanded') !== 'true'); return; }
   const dp = e.target.closest('button.day-places');
+  if (dp && dp.classList.contains('day-route-open')) { showRoutePanel(STATE.days[STATE.currentDayIdx]); return; }
   if (dp) { openPlacesFor(dp.dataset.area); return; }
   const copy = e.target.closest('.xp-copy');
   if (!copy) return;

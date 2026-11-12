@@ -946,3 +946,24 @@ mark { background: var(--chip-bg); color: var(--primary); font-weight: 700; bord
 .handy-fold:not([open]) { margin-top: 0; contain-intrinsic-size: auto 56px; }
 .handy-fold[open] > summary { margin-bottom: 4px; }
 .source-link { padding: 8px 0 4px; text-decoration: none; opacity: 0.85; }
+
+/* ---------- Day route picker ---------- */
+.rt-head { margin: 14px 0 2px; }
+.rt-list { margin: 0 0 12px; }
+.rt-row { display: flex; align-items: center; gap: 8px; min-height: 56px; padding: 6px 0; border-top: 1px solid var(--border); }
+.rt-list .rt-row:first-child { border-top: none; }
+.rt-n { flex: 0 0 auto; display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: var(--primary); color: var(--on-fill); font-size: 0.765rem; font-weight: 700; }
+.rt-text { display: flex; flex-direction: column; flex: 1; min-width: 0; }
+.rt-name { font-size: 0.941rem; font-weight: 600; line-height: 1.25; }
+.rt-sub { font-size: 0.765rem; color: var(--text-soft); }
+.rt-btn { flex: 0 0 auto; display: inline-grid; place-items: center; width: 44px; height: 44px; border: 1px solid var(--border); border-radius: 50%; background: var(--surface); color: var(--primary); }
+.rt-btn .ic { width: 20px; height: 20px; }
+.rt-btn .flip { transform: rotate(180deg); }
+.rt-btn:disabled { opacity: 0.3; }
+.rt-btn + .rt-btn { margin-left: -2px; }
+.rt-btn.rt-add { display: inline-flex; gap: 4px; width: auto; padding: 0 16px; border-radius: 999px; font-size: 0.824rem; font-weight: 700; }
+.rt-empty { margin: 6px 0 12px; font-size: 0.882rem; color: var(--text-soft); }
+.rt-note { margin: 8px 0 4px; }
+.route-card .picker-btn { margin-top: 8px; }
+.rt-reset { display: block; min-height: 44px; margin: 4px 0; padding: 0; border: none; background: none; font-size: 0.882rem; font-weight: 700; color: var(--link); text-decoration: underline; }
+.rt-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
