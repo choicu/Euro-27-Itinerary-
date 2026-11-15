@@ -549,10 +549,12 @@ function dayPlacesHtml(d) {
  *  - Starting list: the rows with an Address, in sheet order. Changes are saved on this phone, per day.
  *  - On the day itself the route starts from wherever the phone is; on any other day it starts at the
  *    first stop (Google can't draw a route from, say, Melbourne to Cortona and shows nothing).
- *  - Google's documented limit on phones is 3 stops between start and end, so each link carries at
- *    most 4 stops; longer routes are split into evenly sized parts. The route also breaks at a flight.
+ *  - Each link carries at most 5 stops between its start and end. Google's guide says 3 on mobile
+ *    browsers, but a 7-place link (5 in between) opened in full in the Google Maps app on Jason's
+ *    S26 Ultra and on the mobile website (15 Nov 2026). Set ROUTE_MAX_VIA back to 3 if stops go missing
+ *    on someone's phone. Longer routes are split into evenly sized parts. The route also breaks at a flight.
  */
-const ROUTE_STOPS_PER_LINK = 4;
+const ROUTE_MAX_VIA = 5;
 const ROUTE_KEY = 'europe2027_route_v1';
 let routeMem = null; // used when storage is blocked
 function loadRoutes() {
@@ -619,7 +621,11 @@ function routeLinks(items, onTheDay) {
   });
   const chunks = [];
   for (const seg of segs.filter((x) => x.length)) {
-    const parts = Math.ceil(seg.length / ROUTE_STOPS_PER_LINK);
+    // Starting at stop 1, one link holds start + in-between stops + end. Starting from the phone's
+    // location, or from the end of the previous part, the start isn't one of the stops.
+    const whole = ROUTE_MAX_VIA + 2;
+    const perPart = ROUTE_MAX_VIA + 1;
+    const parts = !onTheDay && seg.length <= whole ? 1 : Math.ceil(seg.length / perPart);
     const size = Math.ceil(seg.length / parts);
     for (let i = 0; i < seg.length; i += size) {
       // A later part picks up where the previous part ended, so no leg between parts goes missing.
