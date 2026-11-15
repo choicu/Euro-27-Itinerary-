@@ -994,3 +994,13 @@ mark { background: var(--chip-bg); color: var(--primary); font-weight: 700; bord
 .rt-dragging .rt-lifted .rt-grip { color: var(--primary); cursor: grabbing; }
 @media (prefers-reduced-motion: reduce) { .rt-dragging .rt-row { transition: none; } }
 .rt-dragging .rt-part { visibility: hidden; }
+/* Move buttons (shown by tapping a handle) and Undo */
+.rt-row { flex-wrap: wrap; }
+.rt-moves { display: flex; gap: 8px; flex: 1 0 100%; padding: 2px 0 2px 34px; }
+.rt-moves[hidden] { display: none; }
+.rt-move { display: inline-flex; align-items: center; justify-content: center; gap: 6px; flex: 1; min-height: 44px; padding: 0 12px; border: 1px solid var(--border); border-radius: 999px; background: var(--surface); color: var(--primary); font-size: 0.824rem; font-weight: 700; }
+.rt-move .ic { width: 18px; height: 18px; }
+.rt-move .flip { transform: rotate(180deg); }
+.rt-move:disabled { opacity: 0.3; }
+.rt-grip[aria-expanded="true"] { border-color: var(--border); color: var(--primary); }
+.rt-saved-acts { display: inline-flex; gap: 18px; }

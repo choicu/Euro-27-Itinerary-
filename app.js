@@ -658,9 +658,13 @@ function dayRouteSub(d) {
 /* ---- Route picker panel ---- */
 let routeDay = null;
 let routePlacesOpen = false; // "Places to try" group in the picker stays as the person left it
+let routeMovesFor = null;    // id of the stop whose Move up / Move down buttons are showing
+let routeUndo = [];          // earlier versions of this day's route, newest last (cleared when the picker opens)
 function showRoutePanel(d) {
   routeDay = d;
   routePlacesOpen = false;
+  routeMovesFor = null;
+  routeUndo = [];
   const el = document.getElementById('group-picker');
   el.innerHTML = `<div class="picker-card detail-card route-card" role="dialog" aria-label="Day route">
     ${sheetTop('route-close')}
@@ -694,10 +698,12 @@ function drawRouteBody() {
     <li class="rt-row" data-row="${i}">
       <span class="rt-n" aria-hidden="true">${i + 1}</span>
       ${text(it)}
-      ${items.length > 1 ? `<button type="button" class="rt-btn rt-grip" data-grip="${i}" aria-label="Reorder ${escapeHtml(it.name)}: drag, or press the up or down arrow key">${icon('grip')}</button>
-      <button type="button" class="sr" tabindex="-1" data-act="up" data-i="${i}"${i === 0 ? ' disabled' : ''}>Move ${escapeHtml(it.name)} up</button>
-      <button type="button" class="sr" tabindex="-1" data-act="down" data-i="${i}"${i === items.length - 1 ? ' disabled' : ''}>Move ${escapeHtml(it.name)} down</button>` : ''}
+      ${items.length > 1 ? `<button type="button" class="rt-btn rt-grip" data-grip="${i}" aria-expanded="${routeMovesFor === it.id}" aria-controls="rt-moves-${i}" aria-label="Reorder ${escapeHtml(it.name)}: drag, or press the up or down arrow key">${icon('grip')}</button>` : ''}
       <button type="button" class="rt-btn" data-act="remove" data-i="${i}" aria-label="Remove ${escapeHtml(it.name)} from the route">${icon('minus')}</button>
+      ${items.length > 1 ? `<span class="rt-moves" id="rt-moves-${i}"${routeMovesFor === it.id ? '' : ' hidden'}>
+        <button type="button" class="rt-move" data-act="up" data-i="${i}"${i === 0 ? ' disabled' : ''}>${icon('chevDown', 'flip')}Move up</button>
+        <button type="button" class="rt-move" data-act="down" data-i="${i}"${i === items.length - 1 ? ' disabled' : ''}>${icon('chevDown')}Move down</button>
+      </span>` : ''}
     </li>`;
   };
   const addRow = (it) => `<li class="rt-row">
@@ -709,8 +715,11 @@ function drawRouteBody() {
   body.innerHTML = `
     <p class="detail-label rt-head">Route</p>
     ${items.length ? `<ol class="rt-list">${items.map(selRow).join('')}</ol>` : '<p class="rt-empty">No stops yet. Add some below.</p>'}
-    ${links.length ? `<p class="detail-note rt-note">${onTheDay ? 'Starts from your location.' : 'Starts at stop 1. On the day, starts from your location.'}</p>` : ''}
-    ${custom ? '<p class="rt-saved"><span>Edited · saved on this phone</span><button type="button" class="rt-reset" data-act="reset">Reset to the plan</button></p>' : ''}
+    ${items.length ? `<p class="detail-note rt-note">${items.length > 1 ? 'Drag ≡ to reorder. ' : ''}${
+      links.length ? (onTheDay ? 'Starts from your location.' : 'Starts at stop 1. On the day, starts from your location.') : ''}</p>` : ''}
+    ${custom || routeUndo.length ? `<p class="rt-saved"><span>${custom ? 'Edited · saved on this phone' : 'Back to the plan'}</span><span class="rt-saved-acts">
+      ${routeUndo.length ? '<button type="button" class="rt-reset" data-act="undo">Undo</button>' : ''}
+      ${custom ? '<button type="button" class="rt-reset" data-act="reset">Reset to the plan</button>' : ''}</span></p>` : ''}
     ${restDay.length ? `<p class="detail-label rt-head">Also planned today</p><ul class="rt-list">${restDay.map(addRow).join('')}</ul>` : ''}
     ${restPlaces.length ? `<details class="rt-more" id="rt-more"${routePlacesOpen ? ' open' : ''}>
       <summary><span>Places to try</span><span class="rt-more-n">${restPlaces.length}${icon('chevDown', 'fold-chev')}</span></summary>
@@ -726,9 +735,16 @@ function drawRouteBody() {
 }
 
 /** Save a day's stop order, redraw the picker, and confirm the change (highlight + spoken). */
-function commitRoute(d, ids, { say = '', flash = -1, focus = null, reset = false } = {}) {
+function commitRoute(d, ids, { say = '', flash = -1, focus = null, reset = false, undo = false } = {}) {
   const all = loadRoutes();
-  if (reset) delete all[d.day]; else all[d.day] = ids;
+  if (undo) {
+    const prev = routeUndo.pop();
+    if (prev === undefined) return;
+    if (prev === null) delete all[d.day]; else all[d.day] = prev;
+  } else {
+    routeUndo.push(Array.isArray(all[d.day]) ? all[d.day] : null); // what to go back to
+    if (reset) delete all[d.day]; else all[d.day] = ids;
+  }
   saveRoutes(all);
   drawRouteBody();
   const sub = document.getElementById('day-route-sub');
@@ -748,7 +764,22 @@ function moveRouteStop(d, from, to) {
   const ids = items.map((c) => c.id);
   const [id] = ids.splice(from, 1);
   ids.splice(to, 0, id);
-  commitRoute(d, ids, { say: `${items[from].name} moved to ${to + 1}`, flash: to, focus: `[data-grip="${to}"]` });
+  if (routeMovesFor) routeMovesFor = id; // the move buttons follow the stop
+  const dir = to < from ? 'up' : 'down';
+  const sel = routeMovesFor
+    ? `.rt-move[data-act="${dir}"][data-i="${to}"]:not(:disabled), .rt-move[data-i="${to}"]:not(:disabled)`
+    : `[data-grip="${to}"]`;
+  commitRoute(d, ids, { say: `${items[from].name} moved to ${to + 1}`, flash: to, focus: sel });
+}
+
+/** Tapping a handle (rather than dragging it) shows or hides that stop's Move up / Move down buttons. */
+function toggleRouteMoves(i) {
+  const { items } = routeSelection(routeDay);
+  if (!items[i]) return;
+  routeMovesFor = routeMovesFor === items[i].id ? null : items[i].id;
+  drawRouteBody();
+  const body = document.getElementById('route-body');
+  (routeMovesFor ? body.querySelector(`#rt-moves-${i} .rt-move:not(:disabled)`) : body.querySelector(`[data-grip="${i}"]`))?.focus({ preventScroll: true });
 }
 
 document.getElementById('group-picker').addEventListener('click', (e) => {
@@ -765,11 +796,13 @@ document.getElementById('group-picker').addEventListener('click', (e) => {
   else if (act === 'down') moveRouteStop(d, i, i + 1);
   else if (act === 'remove') {
     ids.splice(i, 1);
+    if (routeMovesFor === items[i].id) routeMovesFor = null;
     commitRoute(d, ids, { say: `${items[i].name} removed`, focus: `[data-act="remove"][data-i="${Math.min(i, ids.length - 1)}"]` });
   } else if (act === 'add' && rest[i]) {
     ids.push(rest[i].id);
     commitRoute(d, ids, { say: `${rest[i].name} added as stop ${ids.length}`, flash: ids.length - 1, focus: `[data-act="add"][data-i="${Math.min(i, rest.length - 2)}"]` });
-  } else if (act === 'reset') commitRoute(d, ids, { say: 'Route reset to the plan', reset: true });
+  } else if (act === 'reset') { routeMovesFor = null; commitRoute(d, ids, { say: 'Route reset to the plan', reset: true, focus: '[data-act="undo"]' }); }
+  else if (act === 'undo') commitRoute(d, ids, { say: 'Last change undone', undo: true, focus: '[data-act="undo"]' });
 });
 
 /* Keyboard: with a drag handle focused, the up/down arrow keys move that stop. */
@@ -790,6 +823,7 @@ document.getElementById('group-picker').addEventListener('keydown', (e) => {
 (() => {
   const overlay = document.getElementById('group-picker');
   let drag = null;
+  let skipClick = false;
   const EDGE = 64;      // px from the visible top/bottom where the sheet starts scrolling
   const MAX_SPEED = 14; // px per frame
 
@@ -806,6 +840,7 @@ document.getElementById('group-picker').addEventListener('keydown', (e) => {
       if (j > from && centre > mid) { shift = -h; to += 1; }
       else if (j < from && centre < mid) { shift = h; to -= 1; }
       row.style.transform = shift ? `translateY(${shift}px)` : '';
+      drag.badges[j].textContent = j + 1 + (shift < 0 ? -1 : shift > 0 ? 1 : 0); // numbers follow the rows
     });
     // Keep the dragged row inside the list.
     const min = drag.tops[0] - drag.tops[from];
@@ -813,6 +848,8 @@ document.getElementById('group-picker').addEventListener('keydown', (e) => {
     const max = (drag.tops[last] + drag.heights[last] - h) - drag.tops[from];
     rows[from].style.transform = `translateY(${Math.max(min, Math.min(max, dy))}px)`;
     drag.to = to;
+    drag.badges[from].textContent = to + 1;
+    if (Math.abs(y - startY) > 6) drag.moved = true;
   }
 
   function tick() {
@@ -838,7 +875,9 @@ document.getElementById('group-picker').addEventListener('keydown', (e) => {
     cancelAnimationFrame(drag.raf);
     try { grip.releasePointerCapture(pointerId); } catch (_) { /* already released */ }
     list.classList.remove('rt-dragging');
-    rows.forEach((row) => { row.style.transform = ''; row.classList.remove('rt-lifted'); });
+    rows.forEach((row, j) => { row.style.transform = ''; row.classList.remove('rt-lifted'); drag.badges[j].textContent = j + 1; });
+    // A press that turned into a drag must not also count as a tap on the handle.
+    if (drag.moved) { skipClick = true; setTimeout(() => { skipClick = false; }, 400); }
     drag = null;
     if (commit && to !== from && routeDay) moveRouteStop(routeDay, from, to);
   }
@@ -858,6 +897,7 @@ document.getElementById('group-picker').addEventListener('keydown', (e) => {
       grip, list, card, rows, from, to: from, pointerId: e.pointerId,
       startY: e.clientY, y: e.clientY, startScroll: scroll,
       tops: rects.map((r) => r.top + scroll), heights: rects.map((r) => r.height), h: rects[from].height, raf: 0,
+      badges: rows.map((r) => r.querySelector('.rt-n')), moved: false,
     };
     try { grip.setPointerCapture(e.pointerId); } catch (_) { /* not fatal */ }
     list.classList.add('rt-dragging');
@@ -872,8 +912,17 @@ document.getElementById('group-picker').addEventListener('keydown', (e) => {
   });
   overlay.addEventListener('pointerup', (e) => { if (drag && e.pointerId === drag.pointerId) end(true); });
   overlay.addEventListener('pointercancel', (e) => { if (drag && e.pointerId === drag.pointerId) end(false); });
-  // A drag shouldn't also count as a tap on the handle.
-  overlay.addEventListener('click', (e) => { if (e.target.closest('.rt-grip')) e.preventDefault(); });
+  // Tap (or screen-reader activate) on a handle: show that stop's Move up / Move down buttons.
+  overlay.addEventListener('click', (e) => {
+    const grip = e.target.closest('.rt-grip');
+    if (!grip || !routeDay) return;
+    if (skipClick) { skipClick = false; return; }
+    toggleRouteMoves(parseInt(grip.dataset.grip, 10));
+  });
+  // Escape puts a lifted stop back where it was (and doesn't close the sheet).
+  document.addEventListener('keydown', (e) => {
+    if (drag && e.key === 'Escape') { e.stopImmediatePropagation(); e.preventDefault(); end(false); }
+  }, true);
 })();
 
 /** Part of the day by the phone's clock: before noon, noon to 5pm, 5pm on. */
