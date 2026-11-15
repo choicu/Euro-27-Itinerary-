@@ -694,7 +694,9 @@ function drawRouteBody() {
     <li class="rt-row" data-row="${i}">
       <span class="rt-n" aria-hidden="true">${i + 1}</span>
       ${text(it)}
-      <button type="button" class="rt-btn" data-act="up" data-i="${i}" aria-label="Move ${escapeHtml(it.name)} up"${i === 0 ? ' disabled' : ''}>${icon('chevDown', 'flip')}</button>
+      ${items.length > 1 ? `<button type="button" class="rt-btn rt-grip" data-grip="${i}" aria-label="Reorder ${escapeHtml(it.name)}: drag, or press the up or down arrow key">${icon('grip')}</button>
+      <button type="button" class="sr" tabindex="-1" data-act="up" data-i="${i}"${i === 0 ? ' disabled' : ''}>Move ${escapeHtml(it.name)} up</button>
+      <button type="button" class="sr" tabindex="-1" data-act="down" data-i="${i}"${i === items.length - 1 ? ' disabled' : ''}>Move ${escapeHtml(it.name)} down</button>` : ''}
       <button type="button" class="rt-btn" data-act="remove" data-i="${i}" aria-label="Remove ${escapeHtml(it.name)} from the route">${icon('minus')}</button>
     </li>`;
   };
@@ -723,6 +725,32 @@ function drawRouteBody() {
     : `<p class="rt-empty">${items.length ? 'Add at least two stops to make a route.' : 'Add stops to make a route.'}</p>`;
 }
 
+/** Save a day's stop order, redraw the picker, and confirm the change (highlight + spoken). */
+function commitRoute(d, ids, { say = '', flash = -1, focus = null, reset = false } = {}) {
+  const all = loadRoutes();
+  if (reset) delete all[d.day]; else all[d.day] = ids;
+  saveRoutes(all);
+  drawRouteBody();
+  const sub = document.getElementById('day-route-sub');
+  if (sub) sub.innerHTML = `${dayRouteSub(d)}${icon('chevRight')}`;
+  const body = document.getElementById('route-body');
+  document.getElementById('route-live').textContent = say;
+  const row = flash === -1 ? null : body.querySelector(`[data-row="${flash}"]`);
+  if (row) row.classList.add('rt-flash');
+  const next = focus && body.querySelector(focus);
+  (next || body.querySelector('.rt-btn') || document.getElementById('route-close'))?.focus({ preventScroll: true });
+}
+
+/** Move the stop at position `from` to position `to` (both 0-based). */
+function moveRouteStop(d, from, to) {
+  const { items } = routeSelection(d);
+  if (from === to || from < 0 || to < 0 || from >= items.length || to >= items.length) return;
+  const ids = items.map((c) => c.id);
+  const [id] = ids.splice(from, 1);
+  ids.splice(to, 0, id);
+  commitRoute(d, ids, { say: `${items[from].name} moved to ${to + 1}`, flash: to, focus: `[data-grip="${to}"]` });
+}
+
 document.getElementById('group-picker').addEventListener('click', (e) => {
   const btn = e.target.closest('#route-body [data-act]');
   if (!btn || !routeDay) return;
@@ -733,30 +761,120 @@ document.getElementById('group-picker').addEventListener('click', (e) => {
   const act = btn.dataset.act;
   const i = parseInt(btn.dataset.i, 10);
   const ids = items.map((c) => c.id);
-  let focus = null;  // which control to land on after the list redraws
-  let moved = -1;    // row to highlight
-  let say = '';      // spoken confirmation for screen readers
-  if (act === 'up' && i > 0) {
-    [ids[i - 1], ids[i]] = [ids[i], ids[i - 1]]; focus = ['up', i - 1]; moved = i - 1; say = `${items[i].name} moved to ${i}`;
-  } else if (act === 'remove') {
-    ids.splice(i, 1); focus = ['remove', Math.min(i, ids.length - 1)]; say = `${items[i].name} removed`;
+  if (act === 'up') moveRouteStop(d, i, i - 1);
+  else if (act === 'down') moveRouteStop(d, i, i + 1);
+  else if (act === 'remove') {
+    ids.splice(i, 1);
+    commitRoute(d, ids, { say: `${items[i].name} removed`, focus: `[data-act="remove"][data-i="${Math.min(i, ids.length - 1)}"]` });
   } else if (act === 'add' && rest[i]) {
-    ids.push(rest[i].id); focus = ['add', Math.min(i, rest.length - 2)]; moved = ids.length - 1; say = `${rest[i].name} added as stop ${ids.length}`;
-  } else if (act === 'reset') { say = 'Route reset to the plan'; }
-  const all = loadRoutes();
-  if (act === 'reset') delete all[d.day]; else all[d.day] = ids;
-  saveRoutes(all);
-  drawRouteBody();
-  const sub = document.getElementById('day-route-sub');
-  if (sub) sub.innerHTML = `${dayRouteSub(d)}${icon('chevRight')}`;
-  const body = document.getElementById('route-body');
-  document.getElementById('route-live').textContent = say;
-  const row = moved === -1 ? null : body.querySelector(`[data-row="${moved}"]`);
-  if (row) row.classList.add('rt-flash');
-  let next = focus && body.querySelector(`[data-act="${focus[0]}"][data-i="${focus[1]}"]`);
-  if (next && next.disabled) next = body.querySelector(`[data-act="remove"][data-i="${focus[1]}"]`);
-  (next || body.querySelector('.rt-btn') || document.getElementById('route-close'))?.focus({ preventScroll: true });
+    ids.push(rest[i].id);
+    commitRoute(d, ids, { say: `${rest[i].name} added as stop ${ids.length}`, flash: ids.length - 1, focus: `[data-act="add"][data-i="${Math.min(i, rest.length - 2)}"]` });
+  } else if (act === 'reset') commitRoute(d, ids, { say: 'Route reset to the plan', reset: true });
 });
+
+/* Keyboard: with a drag handle focused, the up/down arrow keys move that stop. */
+document.getElementById('group-picker').addEventListener('keydown', (e) => {
+  const grip = e.target.closest('.rt-grip');
+  if (!grip || !routeDay || (e.key !== 'ArrowUp' && e.key !== 'ArrowDown')) return;
+  e.preventDefault();
+  const i = parseInt(grip.dataset.grip, 10);
+  moveRouteStop(routeDay, i, i + (e.key === 'ArrowUp' ? -1 : 1));
+});
+
+/*
+ * Drag to reorder. A drag starts only on a stop's handle (which has touch scrolling turned off),
+ * so a finger anywhere else on the sheet still scrolls it. While dragging, the other stops slide
+ * out of the way and the sheet scrolls by itself near its top and bottom edges. Nothing is saved
+ * until the finger lifts.
+ */
+(() => {
+  const overlay = document.getElementById('group-picker');
+  let drag = null;
+  const EDGE = 64;      // px from the visible top/bottom where the sheet starts scrolling
+  const MAX_SPEED = 14; // px per frame
+
+  function layout() {
+    const { rows, from, h, card, startY, startScroll, y } = drag;
+    const dy = (y - startY) + (card.scrollTop - startScroll);
+    const top = drag.tops[from] + dy;
+    const centre = top + h / 2;
+    let to = from;
+    rows.forEach((row, j) => {
+      if (j === from) return;
+      const mid = drag.tops[j] + drag.heights[j] / 2;
+      let shift = 0;
+      if (j > from && centre > mid) { shift = -h; to += 1; }
+      else if (j < from && centre < mid) { shift = h; to -= 1; }
+      row.style.transform = shift ? `translateY(${shift}px)` : '';
+    });
+    // Keep the dragged row inside the list.
+    const min = drag.tops[0] - drag.tops[from];
+    const last = rows.length - 1;
+    const max = (drag.tops[last] + drag.heights[last] - h) - drag.tops[from];
+    rows[from].style.transform = `translateY(${Math.max(min, Math.min(max, dy))}px)`;
+    drag.to = to;
+  }
+
+  function tick() {
+    if (!drag) return;
+    const { card, y } = drag;
+    const r = card.getBoundingClientRect();
+    const foot = document.getElementById('route-foot');
+    const bottom = foot ? foot.getBoundingClientRect().top : r.bottom;
+    let v = 0;
+    if (y < r.top + EDGE) v = -MAX_SPEED * Math.min(1, (r.top + EDGE - y) / EDGE);
+    else if (y > bottom - EDGE) v = MAX_SPEED * Math.min(1, (y - (bottom - EDGE)) / EDGE);
+    if (v) {
+      const before = card.scrollTop;
+      card.scrollTop += v;
+      if (card.scrollTop !== before) layout();
+    }
+    drag.raf = requestAnimationFrame(tick);
+  }
+
+  function end(commit) {
+    if (!drag) return;
+    const { rows, from, to, grip, pointerId, list } = drag;
+    cancelAnimationFrame(drag.raf);
+    try { grip.releasePointerCapture(pointerId); } catch (_) { /* already released */ }
+    list.classList.remove('rt-dragging');
+    rows.forEach((row) => { row.style.transform = ''; row.classList.remove('rt-lifted'); });
+    drag = null;
+    if (commit && to !== from && routeDay) moveRouteStop(routeDay, from, to);
+  }
+
+  overlay.addEventListener('pointerdown', (e) => {
+    const grip = e.target.closest('.rt-grip');
+    if (!grip || drag || (e.pointerType === 'mouse' && e.button !== 0)) return;
+    const list = grip.closest('.rt-list');
+    const card = grip.closest('.picker-card');
+    const rows = [...list.querySelectorAll('.rt-row')];
+    const from = rows.indexOf(grip.closest('.rt-row'));
+    if (from === -1 || rows.length < 2) return;
+    e.preventDefault();
+    const scroll = card.scrollTop;
+    const rects = rows.map((r) => r.getBoundingClientRect());
+    drag = {
+      grip, list, card, rows, from, to: from, pointerId: e.pointerId,
+      startY: e.clientY, y: e.clientY, startScroll: scroll,
+      tops: rects.map((r) => r.top + scroll), heights: rects.map((r) => r.height), h: rects[from].height, raf: 0,
+    };
+    try { grip.setPointerCapture(e.pointerId); } catch (_) { /* not fatal */ }
+    list.classList.add('rt-dragging');
+    rows[from].classList.add('rt-lifted');
+    try { navigator.vibrate && navigator.vibrate(10); } catch (_) { /* no haptics */ }
+    drag.raf = requestAnimationFrame(tick);
+  });
+  overlay.addEventListener('pointermove', (e) => {
+    if (!drag || e.pointerId !== drag.pointerId) return;
+    drag.y = e.clientY;
+    layout();
+  });
+  overlay.addEventListener('pointerup', (e) => { if (drag && e.pointerId === drag.pointerId) end(true); });
+  overlay.addEventListener('pointercancel', (e) => { if (drag && e.pointerId === drag.pointerId) end(false); });
+  // A drag shouldn't also count as a tap on the handle.
+  overlay.addEventListener('click', (e) => { if (e.target.closest('.rt-grip')) e.preventDefault(); });
+})();
 
 /** Part of the day by the phone's clock: before noon, noon to 5pm, 5pm on. */
 function nowSlot() {
@@ -903,7 +1021,7 @@ function panelDismissable() { return stayPanelOpen || Boolean(currentGroup()); }
   let y0 = null, dy = 0, card = null;
   overlay.addEventListener('touchstart', (e) => {
     card = e.target.closest('.picker-card');
-    if (!card || !panelDismissable() || card.scrollTop > 0) { y0 = null; return; }
+    if (!card || !panelDismissable() || card.scrollTop > 0 || e.target.closest('.rt-grip')) { y0 = null; return; }
     y0 = e.touches[0].clientY; dy = 0;
   }, { passive: true });
   overlay.addEventListener('touchmove', (e) => {
